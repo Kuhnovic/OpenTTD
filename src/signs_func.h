@@ -25,5 +25,6 @@ void HandleClickOnSign(const Sign *si);
 void DeleteRenameSignWindow(SignID sign);
 
 Window *ShowSignList();
+Window *ShowGoToWindow();
 
 #endif /* SIGNS_FUNC_H */

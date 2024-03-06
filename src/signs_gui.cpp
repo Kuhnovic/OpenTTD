@@ -595,3 +595,365 @@ void DeleteRenameSignWindow(SignID sign)
 
 	if (w != nullptr && w->cur_sign == sign) w->Close();
 }
+
+
+// =====================================================
+// =====================================================
+// =====================================================
+
+struct GoToItemList {
+	/**
+	 * A GUIList contains signs and uses a StringFilter for filtering.
+	 */
+	typedef GUIList<const Sign *, std::nullptr_t, StringFilter &> GUISignList;
+
+	GUISignList signs;
+
+	StringFilter string_filter;                                       ///< The match string to be used when the GUIList is (re)-sorted.
+	static bool match_case;                                           ///< Should case sensitive matching be used?
+	static std::string default_name;                                  ///< Default sign name, used if Sign::name is nullptr.
+
+	GoToItemList() : string_filter(&match_case)
+	{}
+
+	void BuildSignsList()
+	{
+		if (!this->signs.NeedRebuild()) return;
+
+		Debug(misc, 3, "Building sign list");
+
+		this->signs.clear();
+
+		for (const Sign *si : Sign::Iterate()) this->signs.push_back(si);
+
+		this->signs.SetFilterState(true);
+		this->FilterSignList();
+		this->signs.shrink_to_fit();
+		this->signs.RebuildDone();
+	}
+
+	/** Sort signs by their name */
+	static bool SignNameSorter(const Sign *const &a, const Sign *const &b)
+	{
+		/* Signs are very very rarely using the default text, but there can also be
+		 * a lot of them. Therefore a worthwhile performance gain can be made by
+		 * directly comparing Sign::name instead of going through the string
+		 * system for each comparison. */
+		const std::string &a_name = a->name.empty() ? SignList::default_name : a->name;
+		const std::string &b_name = b->name.empty() ? SignList::default_name : b->name;
+
+		int r = StrNaturalCompare(a_name, b_name); // Sort by name (natural sorting).
+
+		return r != 0 ? r < 0 : (a->index < b->index);
+	}
+
+	void SortSignsList()
+	{
+		if (!this->signs.Sort(&SignNameSorter)) return;
+	}
+
+	/** Filter sign list by sign name */
+	static bool CDECL SignNameFilter(const Sign *const *a, StringFilter &filter)
+	{
+		/* Same performance benefit as above for sorting. */
+		const std::string &a_name = (*a)->name.empty() ? SignList::default_name : (*a)->name;
+
+		filter.ResetState();
+		filter.AddLine(a_name);
+		return filter.GetState();
+	}
+
+	/** Filter sign list excluding OWNER_DEITY */
+	static bool CDECL OwnerDeityFilter(const Sign *const *a, StringFilter &)
+	{
+		/* You should never be able to edit signs of owner DEITY */
+		return (*a)->owner != OWNER_DEITY;
+	}
+
+	/** Filter sign list by owner */
+	static bool CDECL OwnerVisibilityFilter(const Sign *const *a, StringFilter &)
+	{
+		assert(!HasBit(_display_opt, DO_SHOW_COMPETITOR_SIGNS));
+		/* Hide sign if non-own signs are hidden in the viewport */
+		return (*a)->owner == _local_company || (*a)->owner == OWNER_DEITY;
+	}
+
+	/** Filter out signs from the sign list that does not match the name filter */
+	void FilterSignList()
+	{
+		this->signs.Filter(&SignNameFilter, this->string_filter);
+		if (_game_mode != GM_EDITOR) this->signs.Filter(&OwnerDeityFilter, this->string_filter);
+		if (!HasBit(_display_opt, DO_SHOW_COMPETITOR_SIGNS)) {
+			this->signs.Filter(&OwnerVisibilityFilter, this->string_filter);
+		}
+	}
+};
+
+//bool SignList::match_case = false;
+//std::string SignList::default_name;
+
+///** Enum referring to the Hotkeys in the sign list window */
+//enum SignListHotkeys {
+//	SLHK_FOCUS_FILTER_BOX, ///< Focus the edit box for editing the filter string
+//};
+
+struct GoToWindow : Window, GoToItemList {
+	QueryString filter_editbox; ///< Filter editbox;
+	int text_offset; ///< Offset of the sign text relative to the left edge of the WID_SIL_LIST widget.
+	Scrollbar *vscroll;
+
+	GoToWindow(WindowDesc *desc, WindowNumber window_number) : Window(desc), filter_editbox(MAX_LENGTH_SIGN_NAME_CHARS *MAX_CHAR_LENGTH, MAX_LENGTH_SIGN_NAME_CHARS)
+	{
+		this->CreateNestedTree();
+		this->vscroll = this->GetScrollbar(WID_SIL_SCROLLBAR);
+		this->FinishInitNested(window_number);
+		//this->SetWidgetLoweredState(WID_SIL_FILTER_MATCH_CASE_BTN, SignList::match_case);
+
+		/* Initialize the text edit widget */
+		this->querystrings[WID_SIL_FILTER_TEXT] = &this->filter_editbox;
+		this->filter_editbox.cancel_button = QueryString::ACTION_CLEAR;
+
+		/* Initialize the filtering variables */
+		this->SetFilterString("");
+
+		/* Create initial list. */
+		this->signs.ForceRebuild();
+		this->signs.ForceResort();
+		this->BuildSortSignList();
+	}
+
+	void OnInit() override
+	{
+		/* Default sign name, used if Sign::name is nullptr. */
+		SignList::default_name = GetString(STR_DEFAULT_SIGN_NAME);
+		this->signs.ForceResort();
+		this->SortSignsList();
+		this->SetDirty();
+	}
+
+	/**
+	 * This function sets the filter string of the sign list. The contents of
+	 * the edit widget is not updated by this function. Depending on if the
+	 * new string is zero-length or not the clear button is made
+	 * disabled/enabled. The sign list is updated according to the new filter.
+	 */
+	void SetFilterString(const char *new_filter_string)
+	{
+		/* check if there is a new filter string */
+		this->string_filter.SetFilterTerm(new_filter_string);
+
+		/* Rebuild the list of signs */
+		this->InvalidateData();
+	}
+
+	void OnPaint() override
+	{
+		if (!this->IsShaded() && this->signs.NeedRebuild()) this->BuildSortSignList();
+		this->DrawWidgets();
+	}
+
+	void DrawWidget(const Rect &r, WidgetID widget) const override
+	{
+		switch (widget) {
+			case WID_SIL_LIST:
+			{
+				Rect tr = r.Shrink(WidgetDimensions::scaled.framerect);
+				uint text_offset_y = (this->resize.step_height - GetCharacterHeight(FS_NORMAL) + 1) / 2;
+				/* No signs? */
+				if (this->vscroll->GetCount() == 0) {
+					DrawString(tr.left, tr.right, tr.top + text_offset_y, STR_STATION_LIST_NONE);
+					return;
+				}
+
+				Dimension d = GetSpriteSize(SPR_COMPANY_ICON);
+				bool rtl = _current_text_dir == TD_RTL;
+				int sprite_offset_y = (this->resize.step_height - d.height + 1) / 2;
+				uint icon_left = rtl ? tr.right - this->text_offset : tr.left;
+				tr = tr.Indent(this->text_offset, rtl);
+
+				/* At least one sign available. */
+				auto [first, last] = this->vscroll->GetVisibleRangeIterators(this->signs);
+				for (auto it = first; it != last; ++it) {
+					const Sign *si = *it;
+
+					if (si->owner != OWNER_NONE) DrawCompanyIcon(si->owner, icon_left, tr.top + sprite_offset_y);
+
+					SetDParam(0, si->index);
+					DrawString(tr.left, tr.right, tr.top + text_offset_y, STR_SIGN_NAME, TC_YELLOW);
+					tr.top += this->resize.step_height;
+				}
+				break;
+			}
+		}
+	}
+
+	void SetStringParameters(WidgetID widget) const override
+	{
+		if (widget == WID_SIL_CAPTION) SetDParam(0, this->vscroll->GetCount());
+	}
+
+	void OnClick([[maybe_unused]] Point pt, WidgetID widget, [[maybe_unused]] int click_count) override
+	{
+		switch (widget) {
+			case WID_SIL_LIST:
+			{
+				auto it = this->vscroll->GetScrolledItemFromWidget(this->signs, pt.y, this, WID_SIL_LIST, WidgetDimensions::scaled.framerect.top);
+				if (it == this->signs.end()) return;
+
+				const Sign *si = *it;
+				ScrollMainWindowToTile(TileVirtXY(si->x, si->y));
+				break;
+			}
+
+			case WID_SIL_FILTER_ENTER_BTN:
+				if (this->signs.size() >= 1) {
+					const Sign *si = this->signs[0];
+					ScrollMainWindowToTile(TileVirtXY(si->x, si->y));
+				}
+				break;
+
+			//case WID_SIL_FILTER_MATCH_CASE_BTN:
+			//	SignList::match_case = !SignList::match_case; // Toggle match case
+			//	this->SetWidgetLoweredState(WID_SIL_FILTER_MATCH_CASE_BTN, SignList::match_case); // Toggle button pushed state
+			//	this->InvalidateData(); // Rebuild the list of signs
+			//	break;
+		}
+	}
+
+	void OnResize() override
+	{
+		this->vscroll->SetCapacityFromWidget(this, WID_SIL_LIST, WidgetDimensions::scaled.framerect.Vertical());
+	}
+
+	void UpdateWidgetSize(WidgetID widget, Dimension *size, [[maybe_unused]] const Dimension &padding, [[maybe_unused]] Dimension *fill, [[maybe_unused]] Dimension *resize) override
+	{
+		switch (widget) {
+			case WID_SIL_LIST:
+			{
+				Dimension spr_dim = GetSpriteSize(SPR_COMPANY_ICON);
+				this->text_offset = WidgetDimensions::scaled.frametext.left + spr_dim.width + 2; // 2 pixels space between icon and the sign text.
+				resize->height = std::max<uint>(GetCharacterHeight(FS_NORMAL), spr_dim.height + 2);
+				Dimension d = { (uint)(this->text_offset + WidgetDimensions::scaled.frametext.right), padding.height + 5 * resize->height };
+				*size = maxdim(*size, d);
+				break;
+			}
+
+			case WID_SIL_CAPTION:
+				SetDParamMaxValue(0, Sign::GetPoolSize(), 3);
+				*size = GetStringBoundingBox(STR_SIGN_LIST_CAPTION);
+				size->height += padding.height;
+				size->width += padding.width;
+				break;
+		}
+	}
+
+	EventState OnHotkey(int hotkey) override
+	{
+		switch (hotkey) {
+			case SLHK_FOCUS_FILTER_BOX:
+				this->SetFocusedWidget(WID_SIL_FILTER_TEXT);
+				SetFocusedWindow(this); // The user has asked to give focus to the text box, so make sure this window is focused.
+				break;
+
+			default:
+				return ES_NOT_HANDLED;
+		}
+
+		return ES_HANDLED;
+	}
+
+	void OnEditboxChanged(WidgetID widget) override
+	{
+		if (widget == WID_SIL_FILTER_TEXT) this->SetFilterString(this->filter_editbox.text.buf);
+	}
+
+	void BuildSortSignList()
+	{
+		if (this->signs.NeedRebuild()) {
+			this->BuildSignsList();
+			this->vscroll->SetCount(this->signs.size());
+			this->SetWidgetDirty(WID_SIL_CAPTION);
+		}
+		this->SortSignsList();
+	}
+
+	/** Resort the sign listing on a regular interval. */
+	IntervalTimer<TimerWindow> rebuild_interval = { std::chrono::seconds(3), [this](auto) {
+		this->BuildSortSignList();
+		this->SetDirty();
+	} };
+
+	/**
+	 * Some data on this window has become invalid.
+	 * @param data Information about the changed data.
+	 * @param gui_scope Whether the call is done from GUI scope. You may not do everything when not in GUI scope. See #InvalidateWindowData() for details.
+	 */
+	void OnInvalidateData([[maybe_unused]] int data = 0, [[maybe_unused]] bool gui_scope = true) override
+	{
+		/* When there is a filter string, we always need to rebuild the list even if
+		 * the amount of signs in total is unchanged, as the subset of signs that is
+		 * accepted by the filter might has changed. */
+		if (data == 0 || data == -1 || !this->string_filter.IsEmpty()) { // New or deleted sign, changed visibility setting or there is a filter string
+			/* This needs to be done in command-scope to enforce rebuilding before resorting invalid data */
+			this->signs.ForceRebuild();
+		} else { // Change of sign contents while there is no filter string
+			this->signs.ForceResort();
+		}
+	}
+
+	/**
+	 * Handler for global hotkeys of the SignListWindow.
+	 * @param hotkey Hotkey
+	 * @return ES_HANDLED if hotkey was accepted.
+	 */
+	static EventState SignListGlobalHotkeys(int hotkey)
+	{
+		if (_game_mode == GM_MENU) return ES_NOT_HANDLED;
+		Window *w = ShowSignList();
+		if (w == nullptr) return ES_NOT_HANDLED;
+		return w->OnHotkey(hotkey);
+	}
+
+	static inline HotkeyList hotkeys{ "signlist", {
+		Hotkey('F', "focus_filter_box", SLHK_FOCUS_FILTER_BOX),
+	}, SignListGlobalHotkeys };
+};
+
+static constexpr NWidgetPart _nested_go_to_widgets[] = {
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_CLOSEBOX, COLOUR_BROWN),
+		NWidget(WWT_CAPTION, COLOUR_BROWN, WID_SIL_CAPTION), SetDataTip(STR_SIGN_LIST_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
+		NWidget(WWT_SHADEBOX, COLOUR_BROWN),
+		NWidget(WWT_DEFSIZEBOX, COLOUR_BROWN),
+		NWidget(WWT_STICKYBOX, COLOUR_BROWN),
+	EndContainer(),
+	NWidget(NWID_HORIZONTAL),
+		NWidget(NWID_VERTICAL),
+			NWidget(WWT_PANEL, COLOUR_BROWN, WID_SIL_LIST), SetMinimalSize(WidgetDimensions::unscaled.frametext.Horizontal() + 16 + 255, 0),
+								SetResize(1, 1), SetFill(1, 0), SetScrollbar(WID_SIL_SCROLLBAR), EndContainer(),
+			NWidget(NWID_HORIZONTAL),
+				NWidget(WWT_PANEL, COLOUR_BROWN), SetFill(1, 1),
+					NWidget(WWT_EDITBOX, COLOUR_BROWN, WID_SIL_FILTER_TEXT), SetMinimalSize(80, 12), SetResize(1, 0), SetFill(1, 0), SetPadding(2, 2, 2, 2),
+							SetDataTip(STR_LIST_FILTER_OSKTITLE, STR_LIST_FILTER_TOOLTIP),
+				EndContainer(),
+			EndContainer(),
+		EndContainer(),
+		NWidget(NWID_VERTICAL),
+			NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_SIL_SCROLLBAR),
+			NWidget(WWT_RESIZEBOX, COLOUR_BROWN),
+		EndContainer(),
+	EndContainer(),
+};
+
+static WindowDesc _go_to_desc(__FILE__, __LINE__,
+	WDP_AUTO, "goto", 358, 138,
+	WC_SIGN_LIST, WC_NONE,
+	0,
+	std::begin(_nested_go_to_widgets), std::end(_nested_go_to_widgets),
+	&GoToWindow::hotkeys
+);
+
+Window *ShowGoToWindow()
+{
+	return AllocateWindowDescFront<GoToWindow>(&_go_to_desc, 0);
+}

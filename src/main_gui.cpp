@@ -49,6 +49,7 @@
 #include "table/strings.h"
 
 #include "safeguards.h"
+#include <signs_func.h>
 
 /**
  * This code is shared for the majority of the pushbuttons.
@@ -207,6 +208,7 @@ enum {
 	GHK_CHAT_SERVER,
 	GHK_CLOSE_NEWS,
 	GHK_CLOSE_ERROR,
+	GHK_GO_TO,
 };
 
 struct MainWindow : Window
@@ -418,6 +420,11 @@ struct MainWindow : Window
 				if (!HideActiveErrorMessage()) return ES_NOT_HANDLED;
 				break;
 
+			case GHK_GO_TO: // show go to window
+				//NOT_REACHED();
+				ShowGoToWindow();
+				break;
+
 			default: return ES_NOT_HANDLED;
 		}
 		return ES_HANDLED;
@@ -510,6 +517,7 @@ struct MainWindow : Window
 		Hotkey({WKC_CTRL | WKC_SHIFT | WKC_RETURN, WKC_CTRL | WKC_SHIFT | 'T'}, "chat_server", GHK_CHAT_SERVER),
 		Hotkey(WKC_SPACE, "close_news", GHK_CLOSE_NEWS),
 		Hotkey(WKC_SPACE, "close_error", GHK_CLOSE_ERROR),
+		Hotkey('G' | WKC_CTRL, "go_to", GHK_GO_TO),
 	}};
 };
 
