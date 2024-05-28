@@ -64,6 +64,7 @@ using TVisitWaterRegionPatchCallBack = std::function<void(const WaterRegionPatch
 void VisitWaterRegionPatchNeighbors(const WaterRegionPatchDesc &water_region_patch, TVisitWaterRegionPatchCallBack &callback);
 
 void AllocateWaterRegions();
+void TEMP_updateAllRegions();
 
 void PrintWaterRegionDebugInfo(TileIndex tile);
 

@@ -19,4 +19,8 @@ add_files(
     yapf_ship_regions.h
     yapf_ship_regions.cpp
     yapf_type.hpp
+
+    new_yapf_base.hpp
+    new_yapf_ship.cpp
+    new_yapf_ship_regions.cpp
 )

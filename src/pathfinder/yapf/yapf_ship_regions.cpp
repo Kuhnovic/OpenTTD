@@ -177,11 +177,13 @@ protected:
 public:
 	inline void PfFollowNode(Node &old_node)
 	{
+		//fmt::println("REGION: expanding from {} {} {}", old_node.m_key.m_water_region_patch.x, old_node.m_key.m_water_region_patch.y, old_node.m_key.m_water_region_patch.label);
 		TVisitWaterRegionPatchCallBack visitFunc = [&](const WaterRegionPatchDesc &water_region_patch)
 		{
 			Node &node = Yapf().CreateNewNode();
 			node.Set(&old_node, water_region_patch);
 			Yapf().AddNewNode(node, TrackFollower{});
+			//fmt::println(" -> adding {} {} {}", water_region_patch.x, water_region_patch.y, water_region_patch.label);
 		};
 		VisitWaterRegionPatchNeighbors(old_node.m_key.m_water_region_patch, visitFunc);
 	}

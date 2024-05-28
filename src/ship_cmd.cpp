@@ -40,6 +40,7 @@
 #include "table/strings.h"
 
 #include <unordered_set>
+#include <fstream>
 
 #include "safeguards.h"
 
@@ -517,6 +518,37 @@ static Track ChooseShipTrack(Ship *v, TileIndex tile, TrackBits tracks)
 			/* Cached path is invalid so continue with pathfinder. */
 			v->path.clear();
 		}
+
+
+		TEMP_updateAllRegions();
+
+		auto t1 = std::chrono::high_resolution_clock::now();
+		constexpr int number_of_iterations = 1; // PUtting this at a higher number MIGHT result in a warmer cache and skew the results...
+		for (int i = 0; i < number_of_iterations; i++) {
+			v->path.clear();
+			YapfShipChooseTrack(v, tile, path_found, v->path);
+		}
+		auto t2 = std::chrono::high_resolution_clock::now();
+		for (int i = 0; i < number_of_iterations; i++) {
+			v->path.clear();
+			YapfShipChooseTrackNEW(v, tile, path_found, v->path);
+		}
+		auto t3 = std::chrono::high_resolution_clock::now();
+		v->path.clear();
+		std::chrono::duration<double, std::nano> ns_old = t2 - t1;
+		std::chrono::duration<double, std::nano> ns_new = t3 - t2;
+		auto ratio = (double)ns_new.count() / ((double)ns_old.count());
+		static double ratio_sum = 0;
+		static int num_calls = 0;
+		ratio_sum += ratio;
+		num_calls++;
+		auto data = fmt::format("HL PF OLD = {}\nHL PF NEW = {}\nratio = {}, average_ratio = {}\n", ns_old.count(), ns_new.count(), ratio, ratio_sum / (double(num_calls)));
+		std::ofstream myfile;
+		myfile.open("C:/dev/KOENBUS_OUTPUT_ship.txt", num_calls == 1 ? std::ios_base::out : std::ios_base::app);
+		myfile << data;
+		myfile.close();
+
+
 
 		track = YapfShipChooseTrack(v, tile, path_found, v->path);
 	}

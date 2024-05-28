@@ -419,6 +419,11 @@ void AllocateWaterRegions()
 	assert(_is_water_region_valid.size() == _water_regions.size());
 }
 
+void TEMP_updateAllRegions()
+{
+	for (auto &region : _water_regions) (void)GetUpdatedWaterRegion(*region.begin());
+}
+
 void PrintWaterRegionDebugInfo(TileIndex tile)
 {
 	GetUpdatedWaterRegion(tile).PrintDebugInfo();

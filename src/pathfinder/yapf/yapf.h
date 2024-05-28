@@ -25,6 +25,7 @@
  * @return         the best trackdir for next turn or INVALID_TRACK if the path could not be found
  */
 Track YapfShipChooseTrack(const Ship *v, TileIndex tile, bool &path_found, ShipPathCache &path_cache);
+Track YapfShipChooseTrackNEW(const Ship *v, TileIndex tile, bool &path_found, ShipPathCache &path_cache);
 
 /**
  * Returns true if it is better to reverse the ship before leaving depot using YAPF.
@@ -33,6 +34,7 @@ Track YapfShipChooseTrack(const Ship *v, TileIndex tile, bool &path_found, ShipP
  * @return true if reversing is better
  */
 bool YapfShipCheckReverse(const Ship *v, Trackdir *trackdir);
+bool YapfShipCheckReverseNEW(const Ship *v, Trackdir *trackdir);
 
 /**
  * Finds the best path for given road vehicle using YAPF.
