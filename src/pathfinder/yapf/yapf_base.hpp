@@ -15,6 +15,25 @@
 #include "../../misc/dbg_helpers.h"
 #include "yapf_type.hpp"
 
+#define BENCHMARK_ENABLED
+#define BENCHMARK_GROUP_RESULTS_PER_TRANSPORT_TYPE // Disable to show distinct results for each individual YAPF template instantation
+
+#ifdef BENCHMARK_ENABLED
+
+#include "error_func.h"
+#include "3rdparty/nanobench/nanobench.h"
+
+struct BenchmarkStats {
+	int runs = 0;
+	int skipped = 0;
+	double summed_reference_duration = 0;
+	double summed_alternative_duration = 0;
+};
+#ifdef BENCHMARK_GROUP_RESULTS_PER_TRANSPORT_TYPE
+static std::unordered_map<char, BenchmarkStats> _benchmark_results;
+#endif
+#endif
+
 /**
  * CYapfBaseT - A-star type path finder base class.
  *  Derive your own pathfinder from it. You must provide the following template argument:
@@ -67,8 +86,16 @@ protected:
 	int stats_cost_calcs = 0; ///< stats - how many node's costs were calculated
 	int stats_cache_hits = 0; ///< stats - how many node's costs were reused from cache
 
+	static inline auto last_print_time = std::chrono::steady_clock::now();
+
 public:
 	int num_steps = 0; ///< this is there for debugging purposes (hope it doesn't hurt)
+
+#ifdef BENCHMARK_ENABLED
+	bool use_alternative_implementation;
+#else
+	static constexpr bool use_alternative_implementation = false;
+#endif
 
 public:
 	/** default constructor */
@@ -91,6 +118,89 @@ public:
 		return *this->settings;
 	}
 
+#ifdef BENCHMARK_ENABLED
+	std::vector<int> GetPathHashes()
+	{
+		std::vector<int> result;
+		Node *best_node = GetBestNode();
+		while (best_node != nullptr) {
+			int hash = best_node->GetKey().CalcHash();
+			result.emplace_back(hash);
+			best_node = best_node->parent;
+		}
+		return result;
+	}
+
+	void RunBenchmark(const VehicleType *v)
+	{
+		using namespace std::chrono_literals;
+
+#ifndef BENCHMARK_GROUP_RESULTS_PER_TRANSPORT_TYPE
+		static std::unordered_map<char, BenchmarkStats> _benchmark_results;
+#endif
+		const char ttc = Yapf().TransportTypeChar();
+		auto &results = _benchmark_results[ttc];
+		++results.runs;
+
+		ankerl::nanobench::Bench bench;
+		bench.output(nullptr);
+		bench.warmup(1); // Update water regions, warm up caches, etc
+		bench.relative(true);
+		//bench.minEpochIterations(10);
+		//bench.minEpochTime(10ms);
+
+		bench.run("reference", [&] {
+			this->use_alternative_implementation = false;
+			FindPathInternal(v);
+		});
+		const auto reference_result = bench.results().back();
+		const auto reference_path = GetPathHashes();
+
+		bench.run("alternative", [&] {
+#ifdef BENCHMARK_COMPARE_SAME_IMPLEMENTATION
+			this->use_alternative_implementation = false;
+#else
+			this->use_alternative_implementation = true;
+#endif
+			FindPathInternal(v);
+		});
+		const auto alternative_result = bench.results().back();
+		const auto alternative_path = GetPathHashes();
+
+		/* Ensure both versions result in the same path */
+		if (reference_path.size() != alternative_path.size()) FatalError("YAPF Benchmark: paths are of different length");
+		for (int i = 0; i < reference_path.size() ; ++i) {
+			if (reference_path.at(i) != alternative_path.at(i)) FatalError("YAPF Benchmark: paths are different");
+		}
+
+		/* Skip unstable results */
+		constexpr double error_limit = 0.05;
+		constexpr auto elapsed = ankerl::nanobench::Result::Measure::elapsed;
+		if (reference_result.medianAbsolutePercentError(elapsed) > error_limit
+			|| alternative_result.medianAbsolutePercentError(elapsed) > error_limit) {
+			++results.skipped;
+			return;
+		}
+
+		results.summed_reference_duration += reference_result.average(elapsed);
+		results.summed_alternative_duration += alternative_result.average(elapsed);
+
+		const double n = results.runs;
+		const double ratio = results.summed_alternative_duration / results.summed_reference_duration;
+		const double percentage_faster = (1.0 - ratio) * 100.0;
+		if (std::chrono::steady_clock::now() - this->last_print_time > 1000ms) {
+			this->last_print_time = std::chrono::steady_clock::now();
+			Debug(yapf, 0, "{} {} : runs = {}, results skipped = {} ({:.1f}%), ratio = {:.4f} ({:.2f}% {})",
+				static_cast<void*>(this),
+				ttc,
+				n,
+				results.skipped, (results.skipped / n) * 100.0,
+				ratio, std::abs(percentage_faster), (percentage_faster >= 0.0 ? "faster" : "slower"));
+		}
+
+	}
+#endif
+
 	/**
 	 * Main pathfinder routine:
 	 *   - set startup node(s)
@@ -102,6 +212,22 @@ public:
 	 */
 	inline bool FindPath(const VehicleType *v)
 	{
+#ifdef BENCHMARK_ENABLED
+		RunBenchmark(v);
+		return FindPathInternal(v);
+	}
+
+	inline bool FindPathInternal(const VehicleType *v)
+	{
+		// Reset members for next run
+		this->nodes = {};
+		this->best_dest_node = nullptr;
+		this->best_intermediate_node = nullptr;
+		this->stats_cost_calcs = 0;
+		this->stats_cache_hits = 0;
+		this->num_steps = 0;
+#endif
+
 		this->vehicle = v;
 
 		Yapf().PfSetStartupNodes();
@@ -209,6 +335,12 @@ public:
 	 */
 	void AddNewNode(Node &n, const TrackFollower &tf)
 	{
+		Node *closed_node = nullptr;
+		if (use_alternative_implementation) {
+			closed_node = this->nodes.FindClosedNode(n.GetKey());
+			if (closed_node) return;
+		}
+
 		/* evaluate the node */
 		bool cached = Yapf().PfNodeCacheFetch(n);
 		if (!cached) {
@@ -245,7 +377,8 @@ public:
 		}
 
 		/* check new node against closed list */
-		Node *closed_node = this->nodes.FindClosedNode(n.GetKey());
+		//Node *closed_node = this->nodes.FindClosedNode(n.GetKey());
+		if (!use_alternative_implementation) closed_node = this->nodes.FindClosedNode(n.GetKey());
 		if (closed_node != nullptr) {
 			/* another node exists with the same key in the closed list
 			 * is it better than new one? */
