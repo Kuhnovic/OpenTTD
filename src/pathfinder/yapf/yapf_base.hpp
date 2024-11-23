@@ -15,6 +15,25 @@
 #include "../../misc/dbg_helpers.h"
 #include "yapf_type.hpp"
 
+#define BENCHMARK_ENABLED
+#define BENCHMARK_GROUP_RESULTS_PER_TRANSPORT_TYPE // Disable to show distinct results for each individual YAPF template instantation
+
+#ifdef BENCHMARK_ENABLED
+
+#include "error_func.h"
+#include "3rdparty/nanobench/nanobench.h"
+
+struct BenchmarkStats {
+	int runs = 0;
+	int skipped = 0;
+	double summed_reference_duration = 0;
+	double summed_alternative_duration = 0;
+};
+#ifdef BENCHMARK_GROUP_RESULTS_PER_TRANSPORT_TYPE
+static std::unordered_map<char, BenchmarkStats> _benchmark_results;
+#endif
+#endif
+
 /**
  * CYapfBaseT - A-star type path finder base class.
  *  Derive your own pathfinder from it. You must provide the following template argument:
@@ -67,8 +86,16 @@ protected:
 	int stats_cost_calcs = 0; ///< stats - how many node's costs were calculated
 	int stats_cache_hits = 0; ///< stats - how many node's costs were reused from cache
 
+	static inline auto last_print_time = std::chrono::steady_clock::now();
+
 public:
 	int num_steps = 0; ///< this is there for debugging purposes (hope it doesn't hurt)
+
+#ifdef BENCHMARK_ENABLED
+	bool use_alternative_implementation;
+#else
+	static constexpr bool use_alternative_implementation = false;
+#endif
 
 public:
 	/** default constructor */
@@ -91,6 +118,89 @@ public:
 		return *this->settings;
 	}
 
+#ifdef BENCHMARK_ENABLED
+	std::vector<int> GetPathHashes()
+	{
+		std::vector<int> result;
+		Node *best_node = GetBestNode();
+		while (best_node != nullptr) {
+			int hash = best_node->GetKey().CalcHash();
+			result.emplace_back(hash);
+			best_node = best_node->parent;
+		}
+		return result;
+	}
+
+	void RunBenchmark(const VehicleType *v)
+	{
+		using namespace std::chrono_literals;
+
+#ifndef BENCHMARK_GROUP_RESULTS_PER_TRANSPORT_TYPE
+		static std::unordered_map<char, BenchmarkStats> _benchmark_results;
+#endif
+		const char ttc = Yapf().TransportTypeChar();
+		auto &results = _benchmark_results[ttc];
+		++results.runs;
+
+		ankerl::nanobench::Bench bench;
+		bench.output(nullptr);
+		bench.warmup(1); // Update water regions, warm up caches, etc
+		bench.relative(true);
+		//bench.minEpochIterations(10);
+		//bench.minEpochTime(10ms);
+
+		bench.run("reference", [&] {
+			this->use_alternative_implementation = false;
+			FindPathInternal(v);
+		});
+		const auto reference_result = bench.results().back();
+		const auto reference_path = GetPathHashes();
+
+		bench.run("alternative", [&] {
+#ifdef BENCHMARK_COMPARE_SAME_IMPLEMENTATION
+			this->use_alternative_implementation = false;
+#else
+			this->use_alternative_implementation = true;
+#endif
+			FindPathInternal(v);
+		});
+		const auto alternative_result = bench.results().back();
+		const auto alternative_path = GetPathHashes();
+
+		/* Ensure both versions result in the same path */
+		if (reference_path.size() != alternative_path.size()) FatalError("YAPF Benchmark: paths are of different length");
+		for (int i = 0; i < reference_path.size() ; ++i) {
+			if (reference_path.at(i) != alternative_path.at(i)) FatalError("YAPF Benchmark: paths are different");
+		}
+
+		/* Skip unstable results */
+		constexpr double error_limit = 0.05;
+		constexpr auto elapsed = ankerl::nanobench::Result::Measure::elapsed;
+		if (reference_result.medianAbsolutePercentError(elapsed) > error_limit
+			|| alternative_result.medianAbsolutePercentError(elapsed) > error_limit) {
+			++results.skipped;
+			return;
+		}
+
+		results.summed_reference_duration += reference_result.average(elapsed);
+		results.summed_alternative_duration += alternative_result.average(elapsed);
+
+		const double n = results.runs;
+		const double ratio = results.summed_alternative_duration / results.summed_reference_duration;
+		const double percentage_faster = (1.0 - ratio) * 100.0;
+		if (std::chrono::steady_clock::now() - this->last_print_time > 1000ms) {
+			this->last_print_time = std::chrono::steady_clock::now();
+			Debug(yapf, 0, "{} {} : runs = {}, results skipped = {} ({:.1f}%), ratio = {:.4f} ({:.2f}% {})",
+				static_cast<void*>(this),
+				ttc,
+				n,
+				results.skipped, (results.skipped / n) * 100.0,
+				ratio, std::abs(percentage_faster), (percentage_faster >= 0.0 ? "faster" : "slower"));
+		}
+
+	}
+#endif
+
 	/**
 	 * Main pathfinder routine:
 	 *   - set startup node(s)
@@ -102,6 +212,22 @@ public:
 	 */
 	inline bool FindPath(const VehicleType *v)
 	{
+#ifdef BENCHMARK_ENABLED
+		RunBenchmark(v);
+		return FindPathInternal(v);
+	}
+
+	inline bool FindPathInternal(const VehicleType *v)
+	{
+		// Reset members for next run
+		this->nodes = {};
+		this->best_dest_node = nullptr;
+		this->best_intermediate_node = nullptr;
+		this->stats_cost_calcs = 0;
+		this->stats_cache_hits = 0;
+		this->num_steps = 0;
+#endif
+
 		this->vehicle = v;
 
 		Yapf().PfSetStartupNodes();
@@ -209,6 +335,80 @@ public:
 	 */
 	void AddNewNode(Node &n, const TrackFollower &tf)
 	{
+		if (this->use_alternative_implementation) {
+			AddNewNode_ALTERNATIVE(n, tf);
+		} else {
+			AddNewNode_REFERENCE(n, tf);
+		}
+	}
+
+	void AddNewNode_ALTERNATIVE(Node &n, const TrackFollower &tf)
+	{
+		/* NOTE: cost calculations can be quite heavy, especially for trains, so we make sure we do them only once! */
+		bool cost_calculated = false;
+		const auto calculateNodeCosts = [&]() -> bool {
+			if (cost_calculated) return true;
+			cost_calculated = true;
+
+			Yapf().PfNodeCacheFetch(n) ? ++this->stats_cost_calcs : ++this->stats_cache_hits;
+
+			if (!Yapf().PfCalcCost(n, &tf)) return false; // Node was marked as invalid
+			if (!Yapf().PfCalcEstimate(n)) return false; // Node was marked as invalid
+			return true;
+		};
+
+		/* Don't re-add the node if another node with the same key is already closed */
+		Node *closed_node = this->nodes.FindClosedNode(n.GetKey());
+		if (closed_node != nullptr) {
+#ifdef WITH_ASSERT
+			/* another node exists with the same key in the closed list
+			 * is it better than new one? */
+			if (!calculateNodeCosts()) return; // Return if node was marked as invalid during cost calculations
+
+			if (n.GetCostEstimate() < closed_node->GetCostEstimate()) {
+				/* If this assert occurs, you have probably problem in
+				 * your Tderived::PfCalcCost() or Tderived::PfCalcEstimate().
+				 * The problem could be:
+				 *  - PfCalcEstimate() gives too large numbers
+				 *  - PfCalcCost() gives too small numbers
+				 *  - You have used negative cost penalty in some cases (cost bonus) */
+				NOT_REACHED();
+			}
+#endif
+			return;
+		}
+
+		if (!calculateNodeCosts()) return;  // Return if node was marked as invalid during cost calculations
+
+		/* The new node can be set as the best intermediate node only once we're
+		 * certain it will be finalized by being inserted into the open list. */
+		bool set_intermediate = this->max_search_nodes > 0 && (this->best_intermediate_node == nullptr
+			|| (this->best_intermediate_node->GetCostEstimate() - this->best_intermediate_node->GetCost()) > (n.GetCostEstimate() - n.GetCost()));
+
+		/* check new node against open list */
+		Node *open_node = this->nodes.FindOpenNode(n.GetKey());
+		if (open_node != nullptr) {
+			/* another node exists with the same key in the open list
+			 * is it better than new one? */
+			if (n.GetCostEstimate() < open_node->GetCostEstimate()) {
+				/* update the old node by value from new one */
+				this->nodes.PopOpenNode(n.GetKey());
+				*open_node = n;
+				/* add the updated old node back to open list */
+				this->nodes.InsertOpenNode(*open_node);
+				if (set_intermediate) this->best_intermediate_node = open_node;
+			}
+			return;
+		}
+
+		/* the new node is really new
+		 * add it to the open list */
+		this->nodes.InsertOpenNode(n);
+		if (set_intermediate) this->best_intermediate_node = &n;
+	}
+
+	void AddNewNode_REFERENCE(Node &n, const TrackFollower &tf)
+	{
 		/* evaluate the node */
 		bool cached = Yapf().PfNodeCacheFetch(n);
 		if (!cached) {
@@ -267,6 +467,7 @@ public:
 		this->nodes.InsertOpenNode(n);
 		if (set_intermediate) this->best_intermediate_node = &n;
 	}
+
 
 	const VehicleType * GetVehicle() const
 	{

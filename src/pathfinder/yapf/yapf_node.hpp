@@ -13,6 +13,8 @@
 #include "../../track_func.h"
 #include "../../misc/dbg_helpers.h"
 
+extern bool _ctrl_pressed;   ///< Is Ctrl pressed?
+
 /** Yapf Node Key that evaluates hash from (and compares) tile & exit dir. */
 struct CYapfNodeKeyExitDir {
 	TileIndex tile;
@@ -123,6 +125,13 @@ struct CYapfNodeT {
 	inline bool operator<(const Node &other) const
 	{
 		return this->estimate < other.estimate;
+
+		//if (!_ctrl_pressed) return this->estimate < other.estimate;
+
+		//if (this->estimate == other.estimate) {
+		//	return this->cost > other.cost;
+		//}
+		//return this->estimate < other.estimate;
 	}
 
 	void Dump(DumpTarget &dmp) const
