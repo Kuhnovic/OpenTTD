@@ -14,6 +14,8 @@
 #include "yapf_ship_regions.h"
 #include "../water_regions.h"
 
+#include "../../viewport_func.h"
+
 #include "../../safeguards.h"
 
 static constexpr int DIRECT_NEIGHBOUR_COST = 100;
@@ -22,6 +24,7 @@ static constexpr int MAX_NUMBER_OF_NODES = 65536;
 
 static constexpr int NODE_LIST_HASH_BITS_OPEN = 12;
 static constexpr int NODE_LIST_HASH_BITS_CLOSED = 12;
+
 
 /** Yapf Node Key that represents a single patch of interconnected water within a water region. */
 struct WaterRegionPatchKey {
@@ -210,6 +213,14 @@ public:
 			if (node != nullptr) {
 				node = node->parent;
 				if (node != nullptr) path.push_back(node->key.water_region_patch);
+			}
+		}
+
+		{ // Draw entire path
+			auto *n = pf.GetBestNode();
+			while (n != nullptr) {
+				DEBUG_DrawWaterRegionPatch(n->key.water_region_patch, DebugColor::Gray, 0);
+				n = n->parent;
 			}
 		}
 
