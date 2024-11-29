@@ -16,6 +16,8 @@
 
 #include "../../safeguards.h"
 
+#include "../../viewport_func.h"
+
 constexpr int DIRECT_NEIGHBOR_COST = 100;
 constexpr int NODES_PER_REGION = 4;
 constexpr int MAX_NUMBER_OF_NODES = 65536;
@@ -212,6 +214,14 @@ public:
 			if (node != nullptr) {
 				node = node->parent;
 				if (node != nullptr) path.push_back(node->key.water_region_patch);
+			}
+		}
+
+		{ // Draw entire path
+			auto *n = pf.GetBestNode();
+			while (n != nullptr) {
+				DEBUG_DrawWaterRegionPatch(n->key.water_region_patch, DebugColor::Gray, 0);
+				n = n->parent;
 			}
 		}
 

@@ -951,6 +951,7 @@ static void DrawTile_Water(TileInfo *ti)
 			DrawWaterDepot(ti);
 			break;
 	}
+	if (TileX(ti->tile) % WATER_REGION_EDGE_LENGTH == 0 || TileY(ti->tile) % WATER_REGION_EDGE_LENGTH == 0) DrawGroundSprite(SPR_DOT, PAL_NONE);
 }
 
 void DrawShipDepotSprite(int x, int y, Axis axis, DepotPart part)

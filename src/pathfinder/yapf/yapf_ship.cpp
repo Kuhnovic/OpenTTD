@@ -18,6 +18,8 @@
 
 #include "../../safeguards.h"
 
+#include "../../viewport_func.h"
+
 constexpr int NUMBER_OR_WATER_REGIONS_LOOKAHEAD = 4;
 constexpr int MAX_SHIP_PF_NODES = (NUMBER_OR_WATER_REGIONS_LOOKAHEAD + 1) * WATER_REGION_NUMBER_OF_TILES * 4; // 4 possible exit dirs per tile.
 
@@ -148,10 +150,16 @@ public:
 	 */
 	inline void PfFollowNode(Node &old_node)
 	{
+		DEBUG_DrawTrack(old_node.key.tile, TrackdirToTrack(old_node.key.td), DebugColor::Gray, -100);
+
 		TrackFollower F(Yapf().GetVehicle());
 		if (F.Follow(old_node.key.tile, old_node.key.td)) {
 			if (this->water_region_corridor.empty()
 					|| std::ranges::find(this->water_region_corridor, GetWaterRegionInfo(F.new_tile)) != this->water_region_corridor.end()) {
+
+				for (Trackdir trackdir : SetTrackdirBitIterator(F.new_td_bits))
+					DEBUG_DrawTrack(F.new_tile, TrackdirToTrack(trackdir), DebugColor::Blue, -200);
+
 				Yapf().AddMultipleNodes(&old_node, F);
 			}
 		}
@@ -214,17 +222,21 @@ public:
 	static Trackdir ChooseShipTrack(const Ship *v, TileIndex tile, TrackdirBits forward_dirs, TrackdirBits reverse_dirs,
 		bool &path_found, ShipPathCache &path_cache, Trackdir &best_origin_dir)
 	{
-		const std::vector<WaterRegionPatchDesc> high_level_path = YapfShipFindWaterRegionPath(v, tile, NUMBER_OR_WATER_REGIONS_LOOKAHEAD + 1);
+		DEBUG_ClearDrawings();
+
 		if (high_level_path.empty()) {
 			path_found = false;
 			/* Make the ship move around aimlessly. This prevents repeated pathfinder calls and clearly indicates that the ship is lost. */
 			return CreateRandomPath(v, path_cache, SHIP_LOST_PATH_LENGTH);
 		}
 
+		for (const auto &patch : high_level_path) DEBUG_DrawWaterRegionPatch(patch, DebugColor::Black, 0);
+
 		/* Try one time without restricting the search area, which generally results in better and more natural looking paths.
 		 * However the pathfinder can hit the node limit in certain situations such as long aqueducts or maze-like terrain.
 		 * If that happens we run the pathfinder again, but restricted only to the regions provided by the region pathfinder. */
 		for (int attempt = 0; attempt < 2; ++attempt) {
+			for (const auto &patch : high_level_path) DEBUG_DrawWaterRegionPatch(patch, attempt == 0 ? DebugColor::Black : DebugColor::Red, 0);
 			Tpf pf(MAX_SHIP_PF_NODES);
 
 			/* Set origin and destination nodes */
@@ -251,7 +263,9 @@ public:
 			const WaterRegionPatchDesc end_water_patch = GetWaterRegionPatchInfo(node->GetTile());
 			assert(GetWaterRegionPatchInfo(tile) == high_level_path.front());
 			const WaterRegionPatchDesc start_water_patch = high_level_path.front();
+			std::vector<std::tuple<Tile, Trackdir, DebugColor>> path_drawing;
 			while (node->parent) {
+				DEBUG_DrawTrack(node->GetTile(), TrackdirToTrack(node->GetTrackdir()), DebugColor::White, 1337);
 				const WaterRegionPatchDesc node_water_patch = GetWaterRegionPatchInfo(node->GetTile());
 
 				const bool node_water_patch_on_high_level_path = std::ranges::find(high_level_path, node_water_patch) != high_level_path.end();
@@ -261,8 +275,10 @@ public:
 				 * This is what can happen when that's not the case https://github.com/OpenTTD/OpenTTD/issues/12176. */
 				if (add_full_path || !node_water_patch_on_high_level_path || node_water_patch == start_water_patch) {
 					path_cache.push_back(node->GetTrackdir());
+					path_drawing.push_back({ node->GetTile(), node->GetTrackdir(), node_water_patch_on_high_level_path ? DebugColor::Red : DebugColor::RedPulsating });
 				} else {
 					path_cache.clear();
+					path_drawing.clear();
 				}
 				node = node->parent;
 			}
@@ -282,9 +298,15 @@ public:
 			/* Take out the last trackdir as the result. */
 			const Trackdir result = path_cache.back().trackdir;
 			path_cache.pop_back();
+			path_drawing.pop_back();
 
 			/* Clear path cache when in final water region patch. This is to allow ships to spread over different docking tiles dynamically. */
 			if (start_water_patch == end_water_patch) path_cache.clear();
+			if (start_water_patch == end_water_patch) path_drawing.clear();
+
+			for (const auto &[t, td, c] : path_drawing) {
+				DEBUG_DrawTrack(t, TrackdirToTrack(td), c, 1337);
+			}
 
 			return result;
 		}

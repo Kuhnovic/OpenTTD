@@ -119,4 +119,24 @@ inline void SetViewportCatchmentSpecializedStation(const Waypoint *st, bool sel)
 	SetViewportCatchmentWaypoint(st, sel);
 }
 
+#include "track_type.h"
+#include "pathfinder/water_regions.h"
+
+enum class DebugColor {
+	White,
+	Blue,
+	Black,
+	Gray,
+	Red,
+	RedPulsating,
+};
+
+
+void DEBUG_DrawTrack(TileIndex tile, Track track, DebugColor color, int layer);
+void DEBUG_DrawRectangle(TileIndex tile, DebugColor color, int layer);
+void DEBUG_DrawWaterRegionPatch(WaterRegionPatchDesc patch, DebugColor color, int layer);
+void DEBUG_DrawWaterRegion(WaterRegionDesc patch, DebugColor color, int layer);
+void DEBUG_ClearDrawings();
+
+
 #endif /* VIEWPORT_FUNC_H */

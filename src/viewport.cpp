@@ -99,6 +99,35 @@
 
 #include "safeguards.h"
 
+#include "map_func.h"
+#include "water.h"
+#include <unordered_map>
+
+PaletteID debugColorToPaletteId(DebugColor color)
+{
+	switch (color) {
+		case DebugColor::White: return PAL_NONE;
+		case DebugColor::Red: return PALETTE_SEL_TILE_RED;
+		case DebugColor::Blue: return PALETTE_SEL_TILE_BLUE;
+		case DebugColor::Black: return PALETTE_ALL_BLACK;
+		case DebugColor::RedPulsating: return PALETTE_TILE_RED_PULSATING;
+		case DebugColor::Gray: return PALETTE_CRASH;
+	}
+	NOT_REACHED();
+}
+
+struct DrawInstruction {
+	TileIndex tile;
+
+	bool draw_rect;
+	DebugColor rect_color;
+
+	TrackBits tracks;
+	std::unordered_map<Track, DebugColor> track_colors;
+};
+
+std::map<int, std::unordered_map<TileIndex::BaseType, DrawInstruction>> _draw_instructions;
+
 Point _tile_fract_coords;
 
 
@@ -965,7 +994,7 @@ static const HighLightStyle _autorail_type[6][2] = {
  * @param *ti TileInfo Tile that is being drawn
  * @param autorail_type Offset into _AutorailTilehSprite[][]
  */
-static void DrawAutorailSelection(const TileInfo *ti, uint autorail_type)
+static void DrawAutorailSelection(const TileInfo * ti, uint autorail_type, std::optional<PaletteID> override_palette = std::nullopt)
 {
 	SpriteID image;
 	PaletteID pal;
@@ -991,6 +1020,8 @@ static void DrawAutorailSelection(const TileInfo *ti, uint autorail_type)
 		image = SPR_AUTORAIL_BASE - offset;
 		pal = PALETTE_SEL_TILE_RED;
 	}
+
+	if (override_palette.has_value()) pal = override_palette.value();
 
 	DrawSelectionSprite(image, _thd.make_square_red ? PALETTE_SEL_TILE_RED : pal, ti, 7, foundation_part);
 }
@@ -1292,7 +1323,32 @@ static void ViewportAddLandscape()
 				_vd.last_foundation_child[1] = LAST_CHILD_NONE;
 
 				_tile_type_procs[tile_type]->draw_tile_proc(&_cur_ti);
-				if (_cur_ti.tile != INVALID_TILE) DrawTileSelection(&_cur_ti);
+				if (_cur_ti.tile != INVALID_TILE) {
+					DrawTileSelection(&_cur_ti);
+					const std::unordered_map<TrackBits, HighLightStyle> trackbit_highlightstyle_map = {
+						{TRACK_BIT_X, HT_DIR_X},
+						{TRACK_BIT_Y, HT_DIR_Y},
+						{TRACK_BIT_UPPER, HT_DIR_HU},
+						{TRACK_BIT_LOWER, HT_DIR_HL},
+						{TRACK_BIT_RIGHT, HT_DIR_VR},
+						{TRACK_BIT_LEFT, HT_DIR_VL} };
+
+					for (const auto& [_, draw_set] : _draw_instructions) {
+						const auto it = draw_set.find(_cur_ti.tile.base());
+						if (it != draw_set.end()) {
+
+							if (it->second.draw_rect) {
+								PaletteID pal = debugColorToPaletteId(it->second.rect_color);
+								DrawTileSelectionRect(&_cur_ti, pal);
+							}
+
+							for (Track t : SetTrackBitIterator(it->second.tracks)) {
+								PaletteID pal = debugColorToPaletteId(it->second.track_colors.at(t));
+								DrawAutorailSelection(&_cur_ti, _autorail_type[trackbit_highlightstyle_map.at(TrackToTrackBits(t))][0], pal);
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -3667,4 +3723,52 @@ void SetViewportCatchmentTown(const Town *t, bool sel)
 		MarkWholeScreenDirty();
 	}
 	if (_viewport_highlight_town != nullptr) SetWindowDirty(WC_TOWN_VIEW, _viewport_highlight_town->index);
+}
+
+void DEBUG_DrawTrack(TileIndex tile, Track track, DebugColor color, int layer)
+{
+	auto &container = _draw_instructions[layer];
+	auto &instruction = container[tile.base()];
+
+	instruction.tracks |= TrackToTrackBits(track);
+	instruction.track_colors[track] = color;
+	MarkTileDirtyByTile(tile);
+}
+
+void DEBUG_DrawRectangle(TileIndex tile, DebugColor color, int layer)
+{
+	auto &container = _draw_instructions[layer];
+	auto &instruction = container[tile.base()];
+
+	instruction.draw_rect = true;
+	instruction.rect_color = color;
+	MarkTileDirtyByTile(tile);
+}
+
+void DEBUG_DrawWaterRegionPatch(WaterRegionPatchDesc patch, DebugColor color, int layer)
+{
+	const auto E = WATER_REGION_EDGE_LENGTH;
+	for (int dx = 0; dx < E; ++dx) {
+		for (int dy = 0; dy < E; ++dy) {
+			int tx = patch.x * E + dx;
+			int ty = patch.y * E + dy;
+			TileIndex tile = TileXY(tx, ty);
+
+			if (patch.label == INVALID_WATER_REGION_PATCH || GetWaterRegionPatchInfo(tile).label == patch.label)
+				DEBUG_DrawRectangle(tile, color, layer);
+
+
+		}
+	}
+}
+
+void DEBUG_DrawWaterRegion(WaterRegionDesc patch, DebugColor color, int layer)
+{
+	return DEBUG_DrawWaterRegionPatch({ patch.x, patch.y, INVALID_WATER_REGION_PATCH }, color, layer);
+}
+
+void DEBUG_ClearDrawings()
+{
+	_draw_instructions.clear();
+	MarkWholeScreenDirty();
 }
