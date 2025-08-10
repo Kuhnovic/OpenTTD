@@ -15,6 +15,11 @@
 
 struct Ship;
 
+static bool _use_preferred_ship_directions = false;
+
 std::vector<WaterRegionPatchDesc> YapfShipFindWaterRegionPath(const Ship *v, TileIndex start_tile, int max_returned_path_length);
+
+bool IsPreferredShipDirection(TileIndex tile, Trackdir td);
+
 
 #endif /* YAPF_SHIP_REGIONS_H */

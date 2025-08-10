@@ -40,8 +40,10 @@
 #include "table/strings.h"
 
 #include <unordered_set>
+#include <ranges>
 
 #include "safeguards.h"
+#include "viewport_func.h"
 
 /** Max distance in tiles (as the crow flies) to search for depots when user clicks "go to depot". */
 constexpr int MAX_SHIP_DEPOT_SEARCH_DISTANCE = 80;
@@ -788,22 +790,94 @@ static void ShipController(Ship *v)
 					return ReverseShipIntoTrackdir(v, trackdir);
 				}
 
+			
+
+				bool any_collision = false;
+				for (Vehicle *veh : VehiclesOnTile(gp.new_tile)) {
+					/* Ignore other vehicles (aircraft) and ships inside depot. */
+					if (veh != v && veh->type == VEH_SHIP && !veh->vehstatus.Test(VehState::Hidden)) {
+						any_collision = true;
+						//if (!IsPreferredShipDirection(veh->tile, veh->GetVehicleTrackdir())) {
+						//	static_cast<Ship *>(veh)->path.clear();
+						//	ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, -4242);
+						//}
+					}
+				}
+
+				if (any_collision) {
+					//if (!IsPreferredShipDirection(gp.new_tile, TrackDirectionToTrackdir(track, b.dir))) {
+					//v->path.clear();
+					//_use_preferred_ship_directions = true;
+					//ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, 666);
+					//}
+				}
+
+
+				auto last_three = v->path | std::views::reverse | std::views::take(3);
+				TileIndex t = gp.old_tile;
+				bool collision = false;
+				for (ShipPathElement& element : last_three) {
+					t = TileAddByDiagDir(t, TrackdirToExitdir(element.trackdir));
+					collision = HasVehicleOnTile(t, [&](const Vehicle *veh) {
+						return veh->type == VEH_SHIP && veh->cur_speed != 0;
+					});
+					if (collision) break;
+				}
+				// TODO advance one tile if 0 elements
+				if (collision) {
+					//v->path.clear();
+					//ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, 666);
+				}
+
+
+
+
+
+
 				/* Choose a direction, and continue if we find one */
-				const Track track = ChooseShipTrack(v, gp.new_tile, tracks);
+				Track track = ChooseShipTrack(v, gp.new_tile, tracks);
+				_use_preferred_ship_directions = false;
 				if (track == INVALID_TRACK) return ReverseShip(v);
+
 
 				const ShipSubcoordData &b = _ship_subcoord[diagdir][track];
 
 				gp.x = (gp.x & ~0xF) | b.x_subcoord;
 				gp.y = (gp.y & ~0xF) | b.y_subcoord;
 
+
+
 				/* Call the landscape function and tell it that the vehicle entered the tile */
 				auto vets = VehicleEnterTile(v, gp.new_tile, gp.x, gp.y);
 				if (vets.Test(VehicleEnterTileState::CannotEnter)) return ReverseShip(v);
 
 				if (!vets.Test(VehicleEnterTileState::EnteredWormhole)) {
+					if (IsWaterTile(v->tile)) {
+						//Tile(v->tile).m6() = 1;
+
+						//Tile(v->tile).m8() = TrackdirToTrackdirBits(v->GetVehicleTrackdir());
+						//Tile(v->tile).m8() = TrackToTrackBits(TRACK_X);
+
+					}
+
+
+					if (IsWaterTile(v->tile)) {
+						//SB(Tile(v->tile).m8(), 0, 8, Tile(v->tile).m8() & ~v->state);
+						//MarkTileDirtyByTile(v->tile);
+					}
+
 					v->tile = gp.new_tile;
 					v->state = TrackToTrackBits(track);
+
+					if (IsWaterTile(v->tile)) {
+						//if (IsPreferredShipDirection(v->tile, v->GetVehicleTrackdir())) {
+							//SB(Tile(v->tile).m8(), 0, 8, v->state);
+							Tile(v->tile).m8() |= TrackdirToTrackdirBits(v->GetVehicleTrackdir());
+							MarkTileDirtyByTile(v->tile);
+						//}
+					}
+
+
 
 					/* Update ship cache when the water class changes. Aqueducts are always canals. */
 					if (GetEffectiveWaterClass(gp.old_tile) != GetEffectiveWaterClass(gp.new_tile)) v->UpdateCache();

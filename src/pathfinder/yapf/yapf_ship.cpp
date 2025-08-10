@@ -17,6 +17,9 @@
 #include "../water_regions.h"
 
 #include "../../safeguards.h"
+#include "../../viewport_func.h"
+
+#include <ranges>
 
 constexpr int NUMBER_OR_WATER_REGIONS_LOOKAHEAD = 4;
 constexpr int MAX_SHIP_PF_NODES = (NUMBER_OR_WATER_REGIONS_LOOKAHEAD + 1) * WATER_REGION_NUMBER_OF_TILES * 4; // 4 possible exit dirs per tile.
@@ -277,12 +280,24 @@ public:
 			 * Return a random reachable trackdir to hopefully nudge the ship out of this strange situation. */
 			if (path_cache.empty()) return CreateRandomPath(v, path_cache, 1);
 
+			Tile t = tile;
+			int counter = 0;
+			for (const ShipPathElement& e : std::ranges::views::reverse(path_cache)) {
+				t = TileAddByDiagDir(t, TrackdirToExitdir(e.trackdir));
+				if (IsWaterTile(t)) {
+					//Tile(t).m6() = 2;
+					//MarkTileDirtyByTile(t);
+				}
+				//counter++;
+				//if (counter > 3) break;
+			}
+
 			/* Take out the last trackdir as the result. */
 			const Trackdir result = path_cache.back().trackdir;
 			path_cache.pop_back();
 
 			/* Clear path cache when in final water region patch. This is to allow ships to spread over different docking tiles dynamically. */
-			if (start_water_patch == end_water_patch) path_cache.clear();
+			//if (start_water_patch == end_water_patch) path_cache.clear();
 
 			return result;
 		}
@@ -336,6 +351,8 @@ public:
 		return *static_cast<Tpf*>(this);
 	}
 
+	bool switch_preferred_dirs = false;
+
 public:
 	inline int CurveCost(Trackdir td1, Trackdir td2)
 	{
@@ -350,23 +367,6 @@ public:
 			return Yapf().PfGetSettings().ship_curve45_penalty;
 		}
 		return 0;
-	}
-
-	/**
-	 * Whether the provided direction is a preferred direction for a given tile. This is used to separate ships travelling in opposite directions.
-	 * @param tile Tile of current node.
-	 * @param td Trackdir of current node.
-	 * @returns true if a preferred direction, false otherwise.
-	 */
-	inline static bool IsPreferredShipDirection(TileIndex tile, Trackdir td)
-	{
-		const bool odd_x = TileX(tile) & 1;
-		const bool odd_y = TileY(tile) & 1;
-		if (td == TRACKDIR_X_NE) return odd_y;
-		if (td == TRACKDIR_X_SW) return !odd_y;
-		if (td == TRACKDIR_Y_NW) return odd_x;
-		if (td == TRACKDIR_Y_SE) return !odd_x;
-		return (odd_x ^ odd_y) ^ HasBit(TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E, td);
 	}
 
 	/**
@@ -391,7 +391,46 @@ public:
 		}
 
 		/* Encourage separation between ships traveling in different directions. */
-		if (!IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH;
+
+		//if (_use_preferred_ship_directions && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH;
+		//if (IsCoastTile(t) || IsWaterTile(t) && Tile(t).m7() > 0) c += YAPF_TILE_LENGTH;
+
+		Tile t = n.GetTile();
+		if (IsWaterTile(t) && Tile(t).m6() > 0) {
+			//if (AddDirectionCost(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH;
+		}
+
+		if (IsWaterTile(t) && Tile(t).m6() > 0) {
+			//c += (YAPF_TILE_LENGTH / 2) * Tile(t).m6();
+			//if (AddDirectionCost(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH / 2;
+
+			//switch_preferred_dirs = true;
+			//if (AddDirectionCost(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH * 2
+			//;
+		}
+
+
+		
+		if (IsWaterTile(t)) {
+			//TrackBits tracks = static_cast<TrackBits>(Tile(t).m8());
+			//if (HasBit(tracks, TrackdirToTrack(n.GetTrackdir()))) c += YAPF_TILE_LENGTH * 5;
+
+			TrackdirBits dirs = static_cast<TrackdirBits>(Tile(t).m8());
+			if (HasBit(dirs, ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
+			//if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 4; // FUN, this creates spreading if there's heavy traffic
+			if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 10; // FUN, this creates spreading if there's heavy traffic
+		}
+
+		if (!IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH / 4;
+
+
+		//const bool collision = HasVehicleOnTile(t, [&](const Vehicle *veh) {
+		//	return veh->type == VEH_SHIP && veh->cur_speed != 0 && TrackdirToTrack(veh->GetVehicleTrackdir()) == TrackdirToTrack(n.GetTrackdir());
+		//	//return veh->type == VEH_SHIP && veh->cur_speed != 0 && (ReverseTrackdir(veh->GetVehicleTrackdir()) == n.GetTrackdir());
+		//});
+		//if (collision) c += YAPF_TILE_LENGTH * 5;
+
+		
 
 		/* Skipped tile cost for aqueducts. */
 		c += YAPF_TILE_LENGTH * tf->tiles_skipped;

@@ -292,3 +292,20 @@ std::vector<WaterRegionPatchDesc> YapfShipFindWaterRegionPath(const Ship *v, Til
 {
 	return CYapfRegionWater::FindWaterRegionPath(v, start_tile, max_returned_path_length);
 }
+
+/**
+ * Whether the provided direction is a preferred direction for a given tile. This is used to separate ships travelling in opposite directions.
+ * @param tile Tile of current node.
+ * @param td Trackdir of current node.
+ * @returns true if a preferred direction, false otherwise.
+ */
+bool IsPreferredShipDirection(TileIndex tile, Trackdir td)
+{
+	const bool odd_x = TileX(tile) & 1;
+	const bool odd_y = TileY(tile) & 1;
+	if (td == TRACKDIR_X_NE) return odd_y;
+	if (td == TRACKDIR_X_SW) return !odd_y;
+	if (td == TRACKDIR_Y_NW) return odd_x;
+	if (td == TRACKDIR_Y_SE) return !odd_x;
+	return (odd_x ^ odd_y) ^ HasBit(TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E, td);
+}

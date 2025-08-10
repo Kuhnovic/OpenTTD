@@ -919,6 +919,38 @@ void DrawWaterClassGround(const TileInfo *ti)
 		case WATER_CLASS_RIVER: DrawRiverWater(ti); break;
 		default: NOT_REACHED();
 	}
+
+	if (Tile(ti->tile).m6() > 0) {
+		DrawGroundSprite(SPR_SELECT_TILE, PALETTE_TILE_RED_PULSATING);
+	}
+
+	if (Tile(ti->tile).m8() == 32) {
+		int zzz = 0;
+	}
+
+	//TrackBits tracks = static_cast<TrackBits>(GB(Tile(ti->tile).m8(), 0, 8));
+	TrackBits tracks = TrackdirBitsToTrackBits(static_cast<TrackdirBits>(Tile(ti->tile).m8()));
+
+
+
+	/* Rail selection types (directions):
+ *  / \    / \    / \    / \   / \   / \
+ * /  /\  /\  \  /===\  /   \ /|  \ /  |\
+ * \/  /  \  \/  \   /  \===/ \|  / \  |/
+ *  \ /    \ /    \ /    \ /   \ /   \ /
+ *   0      1      2      3     4     5*/
+	auto pal = PALETTE_ALL_BLACK;
+	if (HasBit(tracks, TRACK_X)) DrawGroundSprite(SPR_AUTORAIL_BASE + 1, pal);
+	if (HasBit(tracks, TRACK_Y)) DrawGroundSprite(SPR_AUTORAIL_BASE + 9, pal);
+	if (HasBit(tracks, TRACK_UPPER)) DrawGroundSprite(SPR_AUTORAIL_BASE + 17, pal);
+	if (HasBit(tracks, TRACK_LOWER)) DrawGroundSprite(SPR_AUTORAIL_BASE + 26, pal);
+	if (HasBit(tracks, TRACK_LEFT)) DrawGroundSprite(SPR_AUTORAIL_BASE + 35, pal);
+	if (HasBit(tracks, TRACK_RIGHT)) DrawGroundSprite(SPR_AUTORAIL_BASE + 43, pal);
+
+
+
+	//std::array offsets = { 1,       9,      17,      26,      35,      43 }; // tileh = 11
+	//DrawGroundSprite(SPR_AUTORAIL_BASE + offsets[ti->tile.base() % 6], PALETTE_ALL_BLACK);
 }
 
 static void DrawTile_Water(TileInfo *ti)
@@ -943,6 +975,8 @@ static void DrawTile_Water(TileInfo *ti)
 			DrawWaterDepot(ti);
 			break;
 	}
+
+	if (TileX(ti->tile) % WATER_REGION_EDGE_LENGTH == 0 || TileY(ti->tile) % WATER_REGION_EDGE_LENGTH == 0) DrawGroundSprite(SPR_DOT, PAL_NONE);
 }
 
 void DrawShipDepotSprite(int x, int y, Axis axis, DepotPart part)
@@ -1237,6 +1271,28 @@ static void DoDryUp(TileIndex tile)
  */
 void TileLoop_Water(TileIndex tile)
 {
+	if (IsCoastTile(tile)) {
+		for (DiagDirection side = DIAGDIR_BEGIN; side < DIAGDIR_END; ++side) {
+			TileIndex t = TileAddByDiagDir(tile, side);
+			if (IsWaterTile(t)) Tile(t).m7() = 1;
+		}
+	}
+
+	if (IsWaterTile(tile) && Tile(tile).m6() > 0) {
+		Tile(tile).m6() -= 1;
+		MarkTileDirtyByTile(tile);
+	}
+
+	
+
+	//delete_water_counter = (delete_water_counter + 1) % 3; // Must be prime
+	if (IsWaterTile(tile) && Tile(tile).m8() > 0) {
+		if (Chance16(1, 3)) {
+			Tile(tile).m8() = 0;
+			MarkTileDirtyByTile(tile);
+		}
+	}
+
 	if (IsTileType(tile, MP_WATER)) {
 		AmbientSoundEffect(tile);
 		if (IsNonFloodingWaterTile(tile)) return;
