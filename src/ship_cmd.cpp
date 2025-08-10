@@ -813,21 +813,6 @@ static void ShipController(Ship *v)
 				}
 
 
-				auto last_three = v->path | std::views::reverse | std::views::take(3);
-				TileIndex t = gp.old_tile;
-				bool collision = false;
-				for (ShipPathElement& element : last_three) {
-					t = TileAddByDiagDir(t, TrackdirToExitdir(element.trackdir));
-					collision = HasVehicleOnTile(t, [&](const Vehicle *veh) {
-						return veh->type == VEH_SHIP && veh->cur_speed != 0;
-					});
-					if (collision) break;
-				}
-				// TODO advance one tile if 0 elements
-				if (collision) {
-					//v->path.clear();
-					//ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, 666);
-				}
 
 
 
@@ -838,6 +823,8 @@ static void ShipController(Ship *v)
 				Track track = ChooseShipTrack(v, gp.new_tile, tracks);
 				_use_preferred_ship_directions = false;
 				if (track == INVALID_TRACK) return ReverseShip(v);
+
+
 
 
 				const ShipSubcoordData &b = _ship_subcoord[diagdir][track];
@@ -872,11 +859,27 @@ static void ShipController(Ship *v)
 					if (IsWaterTile(v->tile)) {
 						//if (IsPreferredShipDirection(v->tile, v->GetVehicleTrackdir())) {
 							//SB(Tile(v->tile).m8(), 0, 8, v->state);
-							Tile(v->tile).m8() |= TrackdirToTrackdirBits(v->GetVehicleTrackdir());
-							MarkTileDirtyByTile(v->tile);
+							//Tile(v->tile).m8() |= TrackdirToTrackdirBits(v->GetVehicleTrackdir());
+							//MarkTileDirtyByTile(v->tile);
 						//}
 					}
 
+					//	t = TileAddByDiagDir(t, TrackdirToExitdir(td));
+					//	td = e.trackdir;
+
+					//	
+					//	
+
+					//	if (IsWaterTile(t)) {
+					//		//Tile(t).m6() = 1;
+					//		Tile(t).m8() |= TrackdirToTrackdirBits(td);
+					//		MarkTileDirtyByTile(t);
+					//	}
+
+					//	
+
+					//	//if (count++ > 5) break;
+					//}
 
 
 					/* Update ship cache when the water class changes. Aqueducts are always canals. */
@@ -902,6 +905,21 @@ static void ShipController(Ship *v)
 						v->rotation_y_pos = v->y_pos;
 						break;
 				}
+
+
+				Tile t = v->tile;
+				Trackdir td = v->GetVehicleTrackdir();
+				for (const ShipPathElement &e : std::ranges::views::reverse(v->path) | std::views::take(WATER_REGION_EDGE_LENGTH / 1)) {
+					t = TileAddByDiagDir(t, TrackdirToExitdir(td));
+					td = e.trackdir;
+					if (IsWaterTile(t)) {
+						Tile(t).m6() = 1;
+						Tile(t).m8() |= TrackdirToTrackdirBits(e.trackdir);
+						MarkTileDirtyByTile(t);
+					}
+				}
+
+				//v->path.clear();
 			}
 		} else {
 			/* On a bridge */

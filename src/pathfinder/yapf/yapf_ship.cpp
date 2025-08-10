@@ -280,24 +280,22 @@ public:
 			 * Return a random reachable trackdir to hopefully nudge the ship out of this strange situation. */
 			if (path_cache.empty()) return CreateRandomPath(v, path_cache, 1);
 
-			Tile t = tile;
-			int counter = 0;
-			for (const ShipPathElement& e : std::ranges::views::reverse(path_cache)) {
-				t = TileAddByDiagDir(t, TrackdirToExitdir(e.trackdir));
-				if (IsWaterTile(t)) {
-					//Tile(t).m6() = 2;
-					//MarkTileDirtyByTile(t);
-				}
-				//counter++;
-				//if (counter > 3) break;
-			}
+			//Tile t = tile;
+			//int counter = 0;
+			//for (const ShipPathElement& e : std::ranges::views::reverse(path_cache)) {
+			//	t = TileAddByDiagDir(t, TrackdirToExitdir(e.trackdir));
+			//	if (IsWaterTile(t)) {
+			//		Tile(t).m8() |= TrackdirToTrackdirBits(e.trackdir);
+			//		MarkTileDirtyByTile(t);
+			//	}
+			//}
 
 			/* Take out the last trackdir as the result. */
 			const Trackdir result = path_cache.back().trackdir;
 			path_cache.pop_back();
 
 			/* Clear path cache when in final water region patch. This is to allow ships to spread over different docking tiles dynamically. */
-			//if (start_water_patch == end_water_patch) path_cache.clear();
+			if (start_water_patch == end_water_patch) path_cache.clear();
 
 			return result;
 		}
@@ -411,18 +409,23 @@ public:
 
 
 		
-		if (IsWaterTile(t)) {
-			//TrackBits tracks = static_cast<TrackBits>(Tile(t).m8());
-			//if (HasBit(tracks, TrackdirToTrack(n.GetTrackdir()))) c += YAPF_TILE_LENGTH * 5;
+		//if (IsWaterTile(t)) {
+		//	//TrackBits tracks = static_cast<TrackBits>(Tile(t).m8());
+		//	//if (HasBit(tracks, TrackdirToTrack(n.GetTrackdir()))) c += YAPF_TILE_LENGTH * 5;
 
-			TrackdirBits dirs = static_cast<TrackdirBits>(Tile(t).m8());
-			if (HasBit(dirs, ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
-			//if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 4; // FUN, this creates spreading if there's heavy traffic
-			if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 10; // FUN, this creates spreading if there's heavy traffic
+		//	TrackdirBits dirs = static_cast<TrackdirBits>(Tile(t).m8());
+		//	if (HasBit(dirs, ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
+		//	//if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 4; // FUN, this creates spreading if there's heavy traffic
+		//	if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 10; // FUN, this creates spreading if there's heavy traffic
+		//}
+
+		if (IsWaterTile(t) && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) {
+			c += Tile(t).m8() > 0 ? YAPF_TILE_LENGTH * 1 : YAPF_TILE_LENGTH / 4;
 		}
 
-		if (!IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH / 4;
-
+		if (IsWaterTile(t)) {
+			if (Tile(t).m8() > 0) c += YAPF_TILE_LENGTH / 4;
+		}
 
 		//const bool collision = HasVehicleOnTile(t, [&](const Vehicle *veh) {
 		//	return veh->type == VEH_SHIP && veh->cur_speed != 0 && TrackdirToTrack(veh->GetVehicleTrackdir()) == TrackdirToTrack(n.GetTrackdir());
