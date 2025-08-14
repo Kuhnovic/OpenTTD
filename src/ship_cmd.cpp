@@ -718,6 +718,58 @@ static void ShipController(Ship *v)
 
 	if (ShipMoveUpDownOnLock(v)) return;
 
+
+
+	//for (Vehicle *other : VehiclesOnTile(v->tile)) {
+	//		/* Ignore other vehicles (aircraft) and ships inside depot. */
+	//	if (other != v && other->type == VEH_SHIP && !other->vehstatus.Test(VehState::Hidden)) {
+	//		auto other_ship = static_cast<Ship *>(other);
+	//		if (TrackOverlapsTracks(v->state, FindFirstTrack(other_ship->state))) {
+
+
+	//		//TrackdirBits reachable_dirs = TrackdirReachesTrackdirs(v->GetVehicleTrackdir());
+	//		//if (!HasBit(reachable_dirs, other->GetVehicleTrackdir())) v->cur_speed = 1;
+
+
+	//			bool stop = false;
+	//			//if (v->progress == other->progress && v->index < other->index) stop = true;
+	//			if (!stop && v->progress < other->progress) stop = true;
+
+	//			if (stop) {
+	//				//if (other->GetVehicleTrackdir() != ReverseTrackdir(v->GetVehicleTrackdir())) {
+	//				if (v->state != other_ship->state) {
+	//					//v->cur_speed = 1;
+	//					//return;
+	//				}
+	//			}
+
+	//				//if (v->progress == other->progress && v->index > other->index) stop = true;
+	//				//if (v->progress < other->progress) stop = true;
+
+	//				//if (v->GetCurrentMaxSpeed() < other->GetCurrentMaxSpeed()) stop = true;
+
+
+	//				//if (v->index < other->index) {
+
+	//					//TrackdirBits reachable_dirs = TrackdirReachesTrackdirs(v->GetVehicleTrackdir());
+	//					//if (!HasBit(reachable_dirs, other->GetVehicleTrackdir())) v->cur_speed = 1;
+	//					//if (!HasBit(reachable_dirs | TrackdirToTrackdirBits(v->GetVehicleTrackdir()), other->GetVehicleTrackdir())) v->cur_speed = 1;
+
+
+	//					//if (v->state != other_ship->state) v->cur_speed = 1;
+
+	//					//if (TrackdirToExitdir(v->GetVehicleTrackdir()) == TrackdirToExitdir(other->GetVehicleTrackdir())) {
+	//					////if (v->state == other_ship->state) {
+	//					//	v->cur_speed = std::min(v->cur_speed, other->cur_speed);
+	//					//	v->progress = std::min(v->progress, other->progress);
+	//					//} else {
+	//					//	if (v->index < other->index) v->cur_speed = 1;
+	//					//}
+
+	//		}
+	//	}
+	//}
+
 	const uint number_of_steps = ShipAccelerate(v);
 	for (uint i = 0; i < number_of_steps; ++i) {
 		if (ShipMoveUpDownOnLock(v)) return;
@@ -792,25 +844,6 @@ static void ShipController(Ship *v)
 
 			
 
-				bool any_collision = false;
-				for (Vehicle *veh : VehiclesOnTile(gp.new_tile)) {
-					/* Ignore other vehicles (aircraft) and ships inside depot. */
-					if (veh != v && veh->type == VEH_SHIP && !veh->vehstatus.Test(VehState::Hidden)) {
-						any_collision = true;
-						//if (!IsPreferredShipDirection(veh->tile, veh->GetVehicleTrackdir())) {
-						//	static_cast<Ship *>(veh)->path.clear();
-						//	ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, -4242);
-						//}
-					}
-				}
-
-				if (any_collision) {
-					//if (!IsPreferredShipDirection(gp.new_tile, TrackDirectionToTrackdir(track, b.dir))) {
-					//v->path.clear();
-					//_use_preferred_ship_directions = true;
-					//ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, 666);
-					//}
-				}
 
 
 
@@ -906,15 +939,33 @@ static void ShipController(Ship *v)
 						break;
 				}
 
+				// AFTER THIS POINT THE DIRECTION OF THE SHIP IS UP TO DATE AND GetVehicleTrackdir WORKS AGAIN....
+
+
+				//bool any_collision = false;
+				////for (Vehicle *other : VehiclesOnTile(gp.new_tile)) {
+				//for (Vehicle *other : VehiclesOnTile(TileAddByDiagDir(v->tile, TrackdirToExitdir(v->GetVehicleTrackdir())))) {
+				//	/* Ignore other vehicles (aircraft) and ships inside depot. */
+				//	if (other != v && other->type == VEH_SHIP && !other->vehstatus.Test(VehState::Hidden)) {
+				//		
+
+				//		TrackdirBits dirs = TrackdirReachesTrackdirs(v->GetVehicleTrackdir());
+				//		//if (HasBit(dirs, other->GetVehicleTrackdir())) {
+				//		if (other->GetVehicleTrackdir() != ReverseTrackdir(v->GetVehicleTrackdir())) v->cur_speed = 0;
+				//		//}
+				//	}
+				//}
+
+
 
 				Tile t = v->tile;
 				Trackdir td = v->GetVehicleTrackdir();
-				for (const ShipPathElement &e : std::ranges::views::reverse(v->path) | std::views::take(WATER_REGION_EDGE_LENGTH / 1)) {
+				for (const ShipPathElement &e : std::ranges::views::reverse(v->path) | std::views::take(WATER_REGION_EDGE_LENGTH)) {
 					t = TileAddByDiagDir(t, TrackdirToExitdir(td));
 					td = e.trackdir;
-					if (IsWaterTile(t)) {
+					if (IsWaterTile(t) || IsCoastTile(t)) {
 						Tile(t).m6() = 1;
-						Tile(t).m8() |= TrackdirToTrackdirBits(e.trackdir);
+						BlockShipTrackdir(t, td);
 						MarkTileDirtyByTile(t);
 					}
 				}

@@ -44,6 +44,7 @@
 #include "table/strings.h"
 
 #include "safeguards.h"
+#include "pathfinder/yapf/yapf_ship_regions.h"
 
 /**
  * Describes from which directions a specific slope can be flooded (if the tile is floodable at all).
@@ -919,38 +920,6 @@ void DrawWaterClassGround(const TileInfo *ti)
 		case WATER_CLASS_RIVER: DrawRiverWater(ti); break;
 		default: NOT_REACHED();
 	}
-
-	if (Tile(ti->tile).m6() > 0) {
-		DrawGroundSprite(SPR_SELECT_TILE, PALETTE_TILE_RED_PULSATING);
-	}
-
-	if (Tile(ti->tile).m8() == 32) {
-		int zzz = 0;
-	}
-
-	//TrackBits tracks = static_cast<TrackBits>(GB(Tile(ti->tile).m8(), 0, 8));
-	TrackBits tracks = TrackdirBitsToTrackBits(static_cast<TrackdirBits>(Tile(ti->tile).m8()));
-
-
-
-	/* Rail selection types (directions):
- *  / \    / \    / \    / \   / \   / \
- * /  /\  /\  \  /===\  /   \ /|  \ /  |\
- * \/  /  \  \/  \   /  \===/ \|  / \  |/
- *  \ /    \ /    \ /    \ /   \ /   \ /
- *   0      1      2      3     4     5*/
-	auto pal = PALETTE_ALL_BLACK;
-	if (HasBit(tracks, TRACK_X)) DrawGroundSprite(SPR_AUTORAIL_BASE + 1, pal);
-	if (HasBit(tracks, TRACK_Y)) DrawGroundSprite(SPR_AUTORAIL_BASE + 9, pal);
-	if (HasBit(tracks, TRACK_UPPER)) DrawGroundSprite(SPR_AUTORAIL_BASE + 17, pal);
-	if (HasBit(tracks, TRACK_LOWER)) DrawGroundSprite(SPR_AUTORAIL_BASE + 26, pal);
-	if (HasBit(tracks, TRACK_LEFT)) DrawGroundSprite(SPR_AUTORAIL_BASE + 35, pal);
-	if (HasBit(tracks, TRACK_RIGHT)) DrawGroundSprite(SPR_AUTORAIL_BASE + 43, pal);
-
-
-
-	//std::array offsets = { 1,       9,      17,      26,      35,      43 }; // tileh = 11
-	//DrawGroundSprite(SPR_AUTORAIL_BASE + offsets[ti->tile.base() % 6], PALETTE_ALL_BLACK);
 }
 
 static void DrawTile_Water(TileInfo *ti)
@@ -975,6 +944,32 @@ static void DrawTile_Water(TileInfo *ti)
 			DrawWaterDepot(ti);
 			break;
 	}
+
+
+	TrackBits tracks = TrackdirBitsToTrackBits(static_cast<TrackdirBits>(Tile(ti->tile).m8()));
+
+
+
+	auto pal = PALETTE_ALL_BLACK;
+
+	
+
+
+	/* Rail selection types (directions):
+ *  / \    / \    / \    / \   / \   / \
+ * /  /\  /\  \  /===\  /   \ /|  \ /  |\
+ * \/  /  \  \/  \   /  \===/ \|  / \  |/
+ *  \ /    \ /    \ /    \ /   \ /   \ /
+ *   0      1      2      3     4     5*/
+	if (HasBit(tracks, TRACK_X)) DrawGroundSprite(SPR_AUTORAIL_BASE + 1, pal);
+	if (HasBit(tracks, TRACK_Y)) DrawGroundSprite(SPR_AUTORAIL_BASE + 9, pal);
+	if (HasBit(tracks, TRACK_UPPER)) DrawGroundSprite(SPR_AUTORAIL_BASE + 17, pal);
+	if (HasBit(tracks, TRACK_LOWER)) DrawGroundSprite(SPR_AUTORAIL_BASE + 26, pal);
+	if (HasBit(tracks, TRACK_LEFT)) DrawGroundSprite(SPR_AUTORAIL_BASE + 35, pal);
+	if (HasBit(tracks, TRACK_RIGHT)) DrawGroundSprite(SPR_AUTORAIL_BASE + 43, pal);
+
+
+
 
 	if (TileX(ti->tile) % WATER_REGION_EDGE_LENGTH == 0 || TileY(ti->tile) % WATER_REGION_EDGE_LENGTH == 0) DrawGroundSprite(SPR_DOT, PAL_NONE);
 }
@@ -1286,11 +1281,11 @@ void TileLoop_Water(TileIndex tile)
 	
 
 	//delete_water_counter = (delete_water_counter + 1) % 3; // Must be prime
-	if (IsWaterTile(tile) && Tile(tile).m8() > 0) {
-		//if (Chance16(1, 3)) {
+	if ((IsWaterTile(tile) || IsCoastTile(tile)) && Tile(tile).m8() > 0) {
+		if (Chance16(1, 3)) {
 			Tile(tile).m8() = 0;
 			MarkTileDirtyByTile(tile);
-		//}
+		}
 	}
 
 	if (IsTileType(tile, MP_WATER)) {

@@ -21,5 +21,9 @@ std::vector<WaterRegionPatchDesc> YapfShipFindWaterRegionPath(const Ship *v, Til
 
 bool IsPreferredShipDirection(TileIndex tile, Trackdir td);
 
+std::pair<TileIndex, Trackdir> getAdjacentTileTrackdir(TileIndex tile, Trackdir trackdir, bool left);
+
+void BlockShipTrackdir(Tile tile, Trackdir td);
+
 
 #endif /* YAPF_SHIP_REGIONS_H */

@@ -293,6 +293,20 @@ std::vector<WaterRegionPatchDesc> YapfShipFindWaterRegionPath(const Ship *v, Til
 	return CYapfRegionWater::FindWaterRegionPath(v, start_tile, max_returned_path_length);
 }
 
+TrackdirBits GetPreferredShipDirections(TileIndex tile)
+{
+	TrackdirBits result = TRACKDIR_BIT_NONE;
+	const bool odd_x = TileX(tile) & 1;
+	const bool odd_y = TileY(tile) & 1;
+
+	result |= odd_x ? TRACKDIR_BIT_Y_NW : TRACKDIR_BIT_Y_SE;
+	result |= odd_y ? TRACKDIR_BIT_X_NE : TRACKDIR_BIT_X_SW;
+
+	result |= (odd_x ^ odd_y) ? TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E :
+		TRACKDIR_BIT_RIGHT_S | TRACKDIR_BIT_LEFT_N | TRACKDIR_BIT_UPPER_E | TRACKDIR_BIT_LOWER_W;
+	return result;
+}
+
 /**
  * Whether the provided direction is a preferred direction for a given tile. This is used to separate ships travelling in opposite directions.
  * @param tile Tile of current node.
@@ -301,11 +315,47 @@ std::vector<WaterRegionPatchDesc> YapfShipFindWaterRegionPath(const Ship *v, Til
  */
 bool IsPreferredShipDirection(TileIndex tile, Trackdir td)
 {
-	const bool odd_x = TileX(tile) & 1;
+	return HasBit(GetPreferredShipDirections(tile), td);
+
+	/*const bool odd_x = TileX(tile) & 1;
 	const bool odd_y = TileY(tile) & 1;
 	if (td == TRACKDIR_X_NE) return odd_y;
 	if (td == TRACKDIR_X_SW) return !odd_y;
 	if (td == TRACKDIR_Y_NW) return odd_x;
 	if (td == TRACKDIR_Y_SE) return !odd_x;
-	return (odd_x ^ odd_y) ^ HasBit(TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E, td);
+	return (odd_x ^ odd_y) ^ HasBit(TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E, td);*/
 }
+
+
+std::pair<TileIndex, Trackdir> getAdjacentTileTrackdir(TileIndex tile, Trackdir trackdir, bool left)
+{
+	assert(IsValidTrackdir(trackdir));
+
+	const DiagDirDiff turn = left ? DIAGDIRDIFF_90LEFT : DIAGDIRDIFF_90RIGHT;
+
+	if (IsDiagonalTrackdir(trackdir)) {
+		const DiagDirection dir_left = ChangeDiagDir(TrackdirToExitdir(trackdir), turn);
+		return { TileAddByDiagDir(tile, dir_left), trackdir };
+	}
+
+	constexpr TrackdirBits no_offset_dirs = TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E;
+	if (HasBit(no_offset_dirs, trackdir)) return { tile, NextTrackdir(trackdir) };
+
+	const TileIndex tile_forward = TileAddByDiagDir(tile, TrackdirToExitdir(trackdir));
+	const DiagDirection dir_left = ChangeDiagDir(TrackdirToExitdir(trackdir), turn);
+	return { TileAddByDiagDir(tile_forward, dir_left), NextTrackdir(trackdir) };
+}
+
+void BlockShipTrackdir(Tile tile, Trackdir td)
+{
+	auto [left_tile, left_trackdir] = getAdjacentTileTrackdir(tile, td, true);
+	auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(tile, td, false);
+
+
+	
+	const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
+	if (!HasBit(left_water_trackdirs, left_trackdir)) return;
+
+	Tile(tile).m8() |= TrackdirToTrackdirBits(td);
+}
+

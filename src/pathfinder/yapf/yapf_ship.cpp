@@ -407,6 +407,7 @@ public:
 			//;
 		}
 
+		
 
 		
 		//if (IsWaterTile(t)) {
@@ -419,13 +420,171 @@ public:
 		//	if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 10; // FUN, this creates spreading if there's heavy traffic
 		//}
 
-		if (IsWaterTile(t) && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) {
-			c += Tile(t).m8() > 0 ? YAPF_TILE_LENGTH * 1 : YAPF_TILE_LENGTH / 4;
+
+
+
+
+
+		//// X
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_X_NE);
+		//	assert(tile == TileXY(5, 4));
+		//	assert(trackdir == TRACKDIR_X_NE);
+		//}
+
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_X_SW);
+		//	assert(tile == TileXY(5, 6));
+		//	assert(trackdir == TRACKDIR_X_SW);
+		//}
+
+		//// Y
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_Y_NW);
+		//	assert(tile == TileXY(6, 5));
+		//	assert(trackdir == TRACKDIR_Y_NW);
+		//}
+
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_Y_SE);
+		//	assert(tile == TileXY(4, 5));
+		//	assert(trackdir == TRACKDIR_Y_SE);
+		//}
+
+		//
+		//// Corners with adjacent track on same tile
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_RIGHT_N);
+		//	assert(tile == TileXY(5, 5));
+		//	assert(trackdir == TRACKDIR_LEFT_N);
+		//}
+		//
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_LEFT_S);
+		//	assert(tile == TileXY(5, 5));
+		//	assert(trackdir == TRACKDIR_RIGHT_S);
+		//}
+		//
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_UPPER_W);
+		//	assert(tile == TileXY(5, 5));
+		//	assert(trackdir == TRACKDIR_LOWER_W);
+		//}
+		//
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_LOWER_E);
+		//	assert(tile == TileXY(5, 5));
+		//	assert(trackdir == TRACKDIR_UPPER_E);
+		//}
+
+		//// Corners with adjacent track on different tile
+		//		{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_RIGHT_S);
+		//	assert(tile == TileXY(4, 6));
+		//	assert(trackdir == TRACKDIR_LEFT_S);
+		//}
+		//
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_LEFT_N);
+		//	assert(tile == TileXY(6, 4));
+		//	assert(trackdir == TRACKDIR_RIGHT_N);
+		//}
+		//
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_UPPER_E);
+		//	assert(tile == TileXY(4, 4));
+		//	assert(trackdir == TRACKDIR_LOWER_E);
+		//}
+		//
+		//{
+		//	auto [tile, trackdir] = getAdjacentTileTrackdir(TileXY(5, 5), TRACKDIR_LOWER_W);
+		//	assert(tile == TileXY(6, 6));
+		//	assert(trackdir == TRACKDIR_UPPER_W);
+		//}
+
+
+
+		// Avoid reservations of the ship's own trackdir. Surprisingly effective on its own!
+		if (IsWaterTile(t) || IsCoastTile(t)) {
+			//if (HasBit(Tile(t).m8(), ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
 		}
 
-		if (IsWaterTile(t)) {
-			if (Tile(t).m8() > 0) c += YAPF_TILE_LENGTH / 4;
+		if (IsWaterTile(t) || IsCoastTile(t)) {
+			auto [left_tile, left_trackdir] = getAdjacentTileTrackdir(t, n.GetTrackdir(), true);
+			auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(t, n.GetTrackdir(), false);
+
+			//const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
+			//if (!HasBit(left_water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH * 3; // Stick to the right in narrow straights
+			//if (Tile(left_tile).m8() > 0 && !HasBit(water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH * 1; // Stick to the right in narrow straights
+
+			int penalty = YAPF_TILE_LENGTH;
+
+
+			if (!HasBit(Tile(t).m8(), n.GetTrackdir())) penalty += YAPF_TILE_LENGTH / 4; // Prefer tiles that already have the same reservation
+
+			if (HasBit(Tile(t).m8(), ReverseTrackdir(n.GetTrackdir()))) penalty += YAPF_TILE_LENGTH; // Avoid reservations of the ship's own trackdir
+
+			//if (HasBit(Tile(right_tile).m8(), ReverseTrackdir(right_trackdir))) c += YAPF_TILE_LENGTH/2;
+			if (HasBit(Tile(left_tile).m8(), ReverseTrackdir(left_trackdir))) penalty -= YAPF_TILE_LENGTH/2; // EXPLAIN
+
+
+			//if (!HasBit(Tile(left_tile).m8(), ReverseTrackdir(left_trackdir))) {
+			//	c += YAPF_TILE_LENGTH / 2;
+			//	//const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
+			//	//if (!HasBit(left_water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH / 2; // Stick to the right in narrow straights
+			//}
+			//if (HasBit(Tile(left_tile).m8(), ReverseTrackdir(left_trackdir))) {
+
+
+			// Try to leave room on the left if there is any ship traffic coming (coast avoidance)
+			if (HasBit(Tile(t).m8(), ReverseTrackdir(left_trackdir))) {
+				const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
+				if (!HasBit(left_water_trackdirs, left_trackdir)) penalty += YAPF_TILE_LENGTH / 2; // Stick to the right in narrow straights
+			}
+
+
+			//if (HasBit(!Tile(left_tile).m8(), ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
+			//if (HasBit(Tile(left_tile).m8(), n.GetTrackdir())) c += YAPF_TILE_LENGTH;
+
+
+			TrackdirBits crossing_dirs = static_cast<TrackdirBits>(Tile(t).m8()) & DiagdirReachesTrackdirs(ReverseDiagDir(TrackdirToExitdir(n.GetTrackdir())));
+			crossing_dirs = crossing_dirs & ~TrackdirToTrackdirBits(ReverseTrackdir(n.GetTrackdir()));
+
+			// Try to avoid crossing other reservations
+			if ((IsWaterTile(t) || IsCoastTile(t)) && crossing_dirs != TRACKDIR_BIT_NONE) {
+				penalty += YAPF_TILE_LENGTH;
+			}
+
+
+			c += std::max(0, penalty);
 		}
+
+
+
+		//Trackdir a = TRACKDIR_LEFT_N;
+		//TrackdirBits b = DiagdirReachesTrackdirs(ReverseDiagDir(TrackdirToExitdir(a)));
+		//TrackdirBits cc = b & ~TrackdirToTrackdirBits(ReverseTrackdir(a)); // TRACKDIR_BIT_Y_SE + UPPER_E
+		
+	
+
+
+		if ((IsWaterTile(t) || IsCoastTile(t)) && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) {
+			//c += YAPF_TILE_LENGTH / 4;
+		}
+
+
+
+		//if (IsWaterTile(t) && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) {
+		//	c += Tile(t).m8() > 0 ? YAPF_TILE_LENGTH * 1 : YAPF_TILE_LENGTH / 4;
+		//}
+		//if (IsWaterTile(t)) {
+		//	//if (Tile(t).m8() > 0) c += YAPF_TILE_LENGTH / 4;
+		//}
+
+
+
+
+
 
 		//const bool collision = HasVehicleOnTile(t, [&](const Vehicle *veh) {
 		//	return veh->type == VEH_SHIP && veh->cur_speed != 0 && TrackdirToTrack(veh->GetVehicleTrackdir()) == TrackdirToTrack(n.GetTrackdir());
