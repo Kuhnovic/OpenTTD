@@ -952,9 +952,6 @@ static void DrawTile_Water(TileInfo *ti)
 
 	auto pal = PALETTE_ALL_BLACK;
 
-	
-
-
 	/* Rail selection types (directions):
  *  / \    / \    / \    / \   / \   / \
  * /  /\  /\  \  /===\  /   \ /|  \ /  |\
@@ -1282,7 +1279,7 @@ void TileLoop_Water(TileIndex tile)
 
 	//delete_water_counter = (delete_water_counter + 1) % 3; // Must be prime
 	if ((IsWaterTile(tile) || IsCoastTile(tile)) && Tile(tile).m8() > 0) {
-		if (Chance16(1, 3)) {
+		if (Chance16(1, 4)) {
 			Tile(tile).m8() = 0;
 			MarkTileDirtyByTile(tile);
 		}

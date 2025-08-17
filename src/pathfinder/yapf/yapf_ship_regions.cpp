@@ -351,10 +351,15 @@ void BlockShipTrackdir(Tile tile, Trackdir td)
 	auto [left_tile, left_trackdir] = getAdjacentTileTrackdir(tile, td, true);
 	auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(tile, td, false);
 
+	const TrackdirBits right_water_tracks = TrackStatusToTrackdirBits(GetTileTrackStatus(right_tile, TRANSPORT_WATER, 0));
+	//if (!HasBit(right_water_tracks, right_trackdir)) return;
 
-	
 	const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
 	if (!HasBit(left_water_trackdirs, left_trackdir)) return;
+
+
+	//const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
+	//if (!HasBit(left_water_trackdirs, left_trackdir)) return;
 
 	Tile(tile).m8() |= TrackdirToTrackdirBits(td);
 }
