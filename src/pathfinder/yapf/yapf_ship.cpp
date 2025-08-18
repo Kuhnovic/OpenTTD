@@ -256,7 +256,8 @@ public:
 				const WaterRegionPatchDesc node_water_patch = GetWaterRegionPatchInfo(node->GetTile());
 
 				const bool node_water_patch_on_high_level_path = std::ranges::find(high_level_path, node_water_patch) != high_level_path.end();
-				const bool add_full_path = !is_intermediate_destination && node_water_patch != end_water_patch;
+				//const bool add_full_path = !is_intermediate_destination && node_water_patch != end_water_patch;
+				const bool add_full_path = false;
 
 				/* The cached path must always lead to a region patch that's on the high level path.
 				 * This is what can happen when that's not the case https://github.com/OpenTTD/OpenTTD/issues/12176. */
@@ -393,19 +394,7 @@ public:
 		//if (_use_preferred_ship_directions && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH;
 		//if (IsCoastTile(t) || IsWaterTile(t) && Tile(t).m7() > 0) c += YAPF_TILE_LENGTH;
 
-		Tile t = n.GetTile();
-		if (IsWaterTile(t) && Tile(t).m6() > 0) {
-			//if (AddDirectionCost(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH;
-		}
-
-		if (IsWaterTile(t) && Tile(t).m6() > 0) {
-			//c += (YAPF_TILE_LENGTH / 2) * Tile(t).m6();
-			//if (AddDirectionCost(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH / 2;
-
-			//switch_preferred_dirs = true;
-			//if (AddDirectionCost(n.GetTile(), n.GetTrackdir())) c += YAPF_TILE_LENGTH * 2
-			//;
-		}
+		const TileIndex t = n.GetTile();
 
 		
 		// KOENBUS HIER WAS JE
@@ -414,24 +403,12 @@ public:
 			//auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(t, n.GetTrackdir(), false);
 
 			const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
-			if (!HasBit(left_water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH;
+			//if (!HasBit(left_water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH;
 		}
 
 
 
 
-
-
-
-		//if (IsWaterTile(t)) {
-		//	//TrackBits tracks = static_cast<TrackBits>(Tile(t).m8());
-		//	//if (HasBit(tracks, TrackdirToTrack(n.GetTrackdir()))) c += YAPF_TILE_LENGTH * 5;
-
-		//	TrackdirBits dirs = static_cast<TrackdirBits>(Tile(t).m8());
-		//	if (HasBit(dirs, ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
-		//	//if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 4; // FUN, this creates spreading if there's heavy traffic
-		//	if (HasBit(dirs, n.GetTrackdir())) c += YAPF_TILE_LENGTH / 10; // FUN, this creates spreading if there's heavy traffic
-		//}
 
 
 
@@ -441,69 +418,12 @@ public:
 			if (HasBit(Tile(t).m8(), ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
 		}
 
-		/*
+		// Encourage trailing other ships
 		if (IsWaterTile(t) || IsCoastTile(t)) {
-			auto [left_tile, left_trackdir] = getAdjacentTileTrackdir(t, n.GetTrackdir(), true);
-			auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(t, n.GetTrackdir(), false);
-
-			//const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
-			//if (!HasBit(left_water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH * 3; // Stick to the right in narrow straights
-			//if (Tile(left_tile).m8() > 0 && !HasBit(water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH * 1; // Stick to the right in narrow straights
-
-			int penalty = YAPF_TILE_LENGTH;
-
-
-			if (!HasBit(Tile(t).m8(), n.GetTrackdir())) penalty += YAPF_TILE_LENGTH / 4; // Prefer tiles that already have the same reservation
-
-			if (HasBit(Tile(t).m8(), ReverseTrackdir(n.GetTrackdir()))) penalty += YAPF_TILE_LENGTH; // Avoid reservations of the ship's own trackdir
-
-			//if (HasBit(Tile(right_tile).m8(), ReverseTrackdir(right_trackdir))) c += YAPF_TILE_LENGTH/2;
-			if (HasBit(Tile(left_tile).m8(), ReverseTrackdir(left_trackdir))) penalty -= YAPF_TILE_LENGTH/2; // EXPLAIN
-
-
-			//if (!HasBit(Tile(left_tile).m8(), ReverseTrackdir(left_trackdir))) {
-			//	c += YAPF_TILE_LENGTH / 2;
-			//	//const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
-			//	//if (!HasBit(left_water_trackdirs, left_trackdir)) c += YAPF_TILE_LENGTH / 2; // Stick to the right in narrow straights
-			//}
-			//if (HasBit(Tile(left_tile).m8(), ReverseTrackdir(left_trackdir))) {
-
-
-			// Try to leave room on the left if there is any ship traffic coming (coast avoidance)
-			if (HasBit(Tile(t).m8(), ReverseTrackdir(left_trackdir))) {
-				const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
-				if (!HasBit(left_water_trackdirs, left_trackdir)) penalty += YAPF_TILE_LENGTH / 2; // Stick to the right in narrow straights
-			}
-
-
-			//if (HasBit(!Tile(left_tile).m8(), ReverseTrackdir(n.GetTrackdir()))) c += YAPF_TILE_LENGTH;
-			//if (HasBit(Tile(left_tile).m8(), n.GetTrackdir())) c += YAPF_TILE_LENGTH;
-
-
-			TrackdirBits crossing_dirs = static_cast<TrackdirBits>(Tile(t).m8()) & DiagdirReachesTrackdirs(ReverseDiagDir(TrackdirToExitdir(n.GetTrackdir())));
-			crossing_dirs = crossing_dirs & ~TrackdirToTrackdirBits(ReverseTrackdir(n.GetTrackdir()));
-
-			// Try to avoid crossing other reservations
-			if ((IsWaterTile(t) || IsCoastTile(t)) && crossing_dirs != TRACKDIR_BIT_NONE) {
-				penalty += YAPF_TILE_LENGTH;
-			}
-
-
-			c += std::max(0, penalty);
+			if (!HasBit(Tile(t).m8(), n.GetTrackdir())) c += YAPF_TILE_LENGTH / 2;
 		}
-		*/
 
 
-		//Trackdir a = TRACKDIR_LEFT_N;
-		//TrackdirBits b = DiagdirReachesTrackdirs(ReverseDiagDir(TrackdirToExitdir(a)));
-		//TrackdirBits cc = b & ~TrackdirToTrackdirBits(ReverseTrackdir(a)); // TRACKDIR_BIT_Y_SE + UPPER_E
-		
-	
-
-
-		//if ((IsWaterTile(t) || IsCoastTile(t)) && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) {
-		//	c += YAPF_TILE_LENGTH;
-		//}
 
 		auto m8 = static_cast<TrackdirBits>(Tile(t).m8());
 		TrackdirBits crossing_dirs = m8 & DiagdirReachesTrackdirs(ReverseDiagDir(TrackdirToExitdir(n.GetTrackdir())));
@@ -519,25 +439,6 @@ public:
 
 
 
-		//if (IsWaterTile(t) && !IsPreferredShipDirection(n.GetTile(), n.GetTrackdir())) {
-		//	c += Tile(t).m8() > 0 ? YAPF_TILE_LENGTH * 1 : YAPF_TILE_LENGTH / 4;
-		//}
-		//if (IsWaterTile(t)) {
-		//	//if (Tile(t).m8() > 0) c += YAPF_TILE_LENGTH / 4;
-		//}
-
-
-
-
-
-
-		//const bool collision = HasVehicleOnTile(t, [&](const Vehicle *veh) {
-		//	return veh->type == VEH_SHIP && veh->cur_speed != 0 && TrackdirToTrack(veh->GetVehicleTrackdir()) == TrackdirToTrack(n.GetTrackdir());
-		//	//return veh->type == VEH_SHIP && veh->cur_speed != 0 && (ReverseTrackdir(veh->GetVehicleTrackdir()) == n.GetTrackdir());
-		//});
-		//if (collision) c += YAPF_TILE_LENGTH * 5;
-
-		
 
 		/* Skipped tile cost for aqueducts. */
 		c += YAPF_TILE_LENGTH * tf->tiles_skipped;

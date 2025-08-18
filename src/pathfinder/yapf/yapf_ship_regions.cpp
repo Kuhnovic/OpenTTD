@@ -329,6 +329,7 @@ bool IsPreferredShipDirection(TileIndex tile, Trackdir td)
 
 std::pair<TileIndex, Trackdir> getAdjacentTileTrackdir(TileIndex tile, Trackdir trackdir, bool left)
 {
+
 	assert(IsValidTrackdir(trackdir));
 
 	const DiagDirDiff turn = left ? DIAGDIRDIFF_90LEFT : DIAGDIRDIFF_90RIGHT;
@@ -338,7 +339,9 @@ std::pair<TileIndex, Trackdir> getAdjacentTileTrackdir(TileIndex tile, Trackdir 
 		return { TileAddByDiagDir(tile, dir_left), trackdir };
 	}
 
-	constexpr TrackdirBits no_offset_dirs = TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E;
+	const TrackdirBits no_offset_dirs = left ?
+		TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LEFT_S | TRACKDIR_BIT_UPPER_W | TRACKDIR_BIT_LOWER_E :
+		TRACKDIR_BIT_LEFT_N | TRACKDIR_BIT_RIGHT_S | TRACKDIR_BIT_LOWER_W | TRACKDIR_BIT_UPPER_E;
 	if (HasBit(no_offset_dirs, trackdir)) return { tile, NextTrackdir(trackdir) };
 
 	const TileIndex tile_forward = TileAddByDiagDir(tile, TrackdirToExitdir(trackdir));
@@ -349,18 +352,23 @@ std::pair<TileIndex, Trackdir> getAdjacentTileTrackdir(TileIndex tile, Trackdir 
 void BlockShipTrackdir(Tile tile, Trackdir td)
 {
 	auto [left_tile, left_trackdir] = getAdjacentTileTrackdir(tile, td, true);
-	auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(tile, td, false);
+	//auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(tile, td, false);
 
-	const TrackdirBits right_water_tracks = TrackStatusToTrackdirBits(GetTileTrackStatus(right_tile, TRANSPORT_WATER, 0));
+	//const TrackdirBits right_water_tracks = TrackStatusToTrackdirBits(GetTileTrackStatus(right_tile, TRANSPORT_WATER, 0));
 	//if (!HasBit(right_water_tracks, right_trackdir)) return;
 
 	const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
 	if (!HasBit(left_water_trackdirs, left_trackdir)) return;
 
 
+
+
 	//const TrackdirBits left_water_trackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(left_tile, TRANSPORT_WATER, 0));
 	//if (!HasBit(left_water_trackdirs, left_trackdir)) return;
 
 	Tile(tile).m8() |= TrackdirToTrackdirBits(td);
+	if (IsValidTile(left_tile)) {
+		Tile(left_tile).m8() |= TrackdirToTrackdirBits(ReverseTrackdir(left_trackdir));
+	}
 }
 

@@ -960,7 +960,7 @@ static void ShipController(Ship *v)
 
 				Tile t = v->tile;
 				Trackdir td = v->GetVehicleTrackdir();
-				for (const ShipPathElement &e : std::ranges::views::reverse(v->path) | std::views::take(WATER_REGION_EDGE_LENGTH)) {
+				for (const ShipPathElement &e : std::ranges::views::reverse(v->path) | std::views::take(10*WATER_REGION_EDGE_LENGTH)) {
 					t = TileAddByDiagDir(t, TrackdirToExitdir(td));
 					td = e.trackdir;
 					if (IsWaterTile(t) || IsCoastTile(t)) {
@@ -969,6 +969,9 @@ static void ShipController(Ship *v)
 						MarkTileDirtyByTile(t);
 					}
 				}
+
+				//Tile(v->tile).m8() = 0; // TODO only clear own tracks
+				ClrBit(Tile(v->tile).m8(), v->GetVehicleTrackdir());
 
 				//v->path.clear();
 			}
