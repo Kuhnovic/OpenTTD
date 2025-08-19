@@ -352,7 +352,7 @@ std::pair<TileIndex, Trackdir> getAdjacentTileTrackdir(TileIndex tile, Trackdir 
 void BlockShipTrackdir(Tile tile, Trackdir td)
 {
 	auto [left_tile, left_trackdir] = getAdjacentTileTrackdir(tile, td, true);
-	//auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(tile, td, false);
+	auto [right_tile, right_trackdir] = getAdjacentTileTrackdir(tile, td, false);
 
 	//const TrackdirBits right_water_tracks = TrackStatusToTrackdirBits(GetTileTrackStatus(right_tile, TRANSPORT_WATER, 0));
 	//if (!HasBit(right_water_tracks, right_trackdir)) return;
@@ -369,6 +369,11 @@ void BlockShipTrackdir(Tile tile, Trackdir td)
 	Tile(tile).m8() |= TrackdirToTrackdirBits(td);
 	if (IsValidTile(left_tile)) {
 		Tile(left_tile).m8() |= TrackdirToTrackdirBits(ReverseTrackdir(left_trackdir));
+	}
+
+	if (IsValidTile(right_tile)) {
+		// Seems to work surprisingly well, better than encouraging trailing
+		Tile(right_tile).m8() |= TrackdirToTrackdirBits((right_trackdir));
 	}
 }
 
