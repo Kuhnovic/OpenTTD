@@ -137,6 +137,7 @@ void Ship::GetImage(Direction direction, EngineImageType image_type, VehicleSpri
 	uint8_t spritenum = this->spritenum;
 
 	if (image_type == EngineImageType::OnMap) direction = this->rotation;
+	if (this->vehicle_flags.Test(VehicleFlag::DrivingBackwards)) direction = ReverseDir(direction);
 
 	if (IsCustomVehicleSpriteNum(spritenum)) {
 		GetCustomVehicleSprite(this, direction, image_type, result);
@@ -594,6 +595,12 @@ static void ReverseShipIntoTrackdir(Ship *v, Trackdir trackdir)
 	assert(v->direction != Direction::Invalid);
 	v->state = TrackdirBitsToTrackBits(TrackdirToTrackdirBits(trackdir));
 
+	/* Double-ended ships can simply reverse without turning. */
+	if (v->GetEngine()->VehInfo<ShipVehicleInfo>().double_ended) {
+		v->rotation = v->direction;
+		v->vehicle_flags.Flip(VehicleFlag::DrivingBackwards);
+	}
+
 	/* Remember our current location to avoid movement glitch */
 	v->rotation_x_pos = v->x_pos;
 	v->rotation_y_pos = v->y_pos;
@@ -607,6 +614,12 @@ static void ReverseShipIntoTrackdir(Ship *v, Trackdir trackdir)
 static void ReverseShip(Ship *v)
 {
 	v->direction = ReverseDir(v->direction);
+
+	/* Double-ended ships can simply reverse without turning. */
+	if (v->GetEngine()->VehInfo<ShipVehicleInfo>().double_ended) {
+		v->rotation = v->direction;
+		v->vehicle_flags.Flip(VehicleFlag::DrivingBackwards);
+	}
 
 	/* Remember our current location to avoid movement glitch */
 	v->rotation_x_pos = v->x_pos;

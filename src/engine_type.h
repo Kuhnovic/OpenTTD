@@ -108,6 +108,7 @@ struct ShipVehicleInfo {
 	uint8_t visual_effect = VE_DEFAULT; ///< Bitstuffed NewGRF visual effect data
 	uint8_t ocean_speed_frac = 0; ///< Fraction of maximum speed for ocean tiles.
 	uint8_t canal_speed_frac = 0; ///< Fraction of maximum speed for canal/river tiles.
+	bool double_ended = false; ///< Whether the ship is double-ended, i.e. whether it can reverse direction without having to turn around.
 
 	/**
 	 * Apply ocean/canal speed fraction to a velocity.
