@@ -2769,6 +2769,7 @@ static void SpawnAdvancedVisualEffect(const Vehicle *v)
 
 	Direction l_dir = v->direction;
 	if (v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped)) l_dir = ReverseDir(l_dir);
+	if (v->type == VehicleType::Ship && v->vehicle_flags.Test(VehicleFlag::DrivingBackwards)) l_dir = ReverseDir(l_dir);
 	Direction t_dir = ChangeDir(l_dir, DirDiff::Right90);
 
 	int8_t x_center = _vehicle_smoke_pos[l_dir] * l_center;
@@ -2966,7 +2967,8 @@ void Vehicle::ShowVisualEffect() const
 			int x = _vehicle_smoke_pos[v->direction] * effect_offset;
 			int y = _vehicle_smoke_pos[ChangeDir(v->direction, DirDiff::Right90)] * effect_offset;
 
-			if (v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped)) {
+			if (v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped)
+					|| v->type == VehicleType::Ship && v->vehicle_flags.Test(VehicleFlag::DrivingBackwards)) {
 				x = -x;
 				y = -y;
 			}
