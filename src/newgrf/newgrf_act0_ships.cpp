@@ -212,10 +212,6 @@ static ChangeInfoResult ShipVehicleChangeInfo(uint first, uint last, int prop, B
 				e->badges = ReadBadgeList(buf, GrfSpecFeature::Ships);
 				break;
 
-			case 0x27: // Double-ended
-				svi->double_ended = (buf.ReadByte() != 0);
-				break;
-
 			default:
 				ret = CommonVehicleChangeInfo(ei, prop, buf);
 				break;

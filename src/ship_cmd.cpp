@@ -596,7 +596,7 @@ static void ReverseShipIntoTrackdir(Ship *v, Trackdir trackdir)
 	v->state = TrackdirBitsToTrackBits(TrackdirToTrackdirBits(trackdir));
 
 	/* Double-ended ships can instantly "turn" 180 degrees by switching which end is forward-facing. */
-	if (v->GetEngine()->VehInfo<ShipVehicleInfo>().double_ended) {
+	if (v->GetEngine()->info.extra_flags.Test(ExtraEngineFlag::IsDoubleEnded)) {
 		v->rotation = ReverseDir(v->rotation);
 		v->flags.Flip(VehicleShipFlag::SecondEndFacingForward);
 	}
@@ -616,7 +616,7 @@ static void ReverseShip(Ship *v)
 	v->direction = ReverseDir(v->direction);
 
 	/* Double-ended ships can instantly "turn" 180 degrees by switching which end is forward-facing. */
-	if (v->GetEngine()->VehInfo<ShipVehicleInfo>().double_ended) {
+	if (v->GetEngine()->info.extra_flags.Test(ExtraEngineFlag::IsDoubleEnded)) {
 		v->rotation = ReverseDir(v->rotation);
 		v->flags.Flip(VehicleShipFlag::SecondEndFacingForward);
 	}

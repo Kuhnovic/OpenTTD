@@ -108,7 +108,6 @@ struct ShipVehicleInfo {
 	uint8_t visual_effect = VE_DEFAULT; ///< Bitstuffed NewGRF visual effect data
 	uint8_t ocean_speed_frac = 0; ///< Fraction of maximum speed for ocean tiles.
 	uint8_t canal_speed_frac = 0; ///< Fraction of maximum speed for canal/river tiles.
-	bool double_ended = false; ///< Whether the ship is double-ended, i.e. whether it can reverse direction without having to turn around.
 
 	/**
 	 * Apply ocean/canal speed fraction to a velocity.
@@ -176,6 +175,7 @@ enum class ExtraEngineFlag : uint8_t {
 	JoinPreview     = 2, ///< Engine will join exclusive preview with variant parent.
 	SyncReliability = 3, ///< Engine reliability will be synced with variant parent.
 	HasCab          = 4, ///< Train wagon has a cab and can lead a train when backing up, without any speed reduction.
+	IsDoubleEnded   = 5, ///< Ship is double-ended, it can reverse direction without having to turn around.
 };
 
 /** Bitset of \c ExtraEngineFlag elements. */
