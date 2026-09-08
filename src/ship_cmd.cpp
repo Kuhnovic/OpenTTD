@@ -137,7 +137,7 @@ void Ship::GetImage(Direction direction, EngineImageType image_type, VehicleSpri
 	uint8_t spritenum = this->spritenum;
 
 	if (image_type == EngineImageType::OnMap) direction = this->rotation;
-	if (this->vehicle_flags.Test(VehicleFlag::DrivingBackwards)) direction = ReverseDir(direction);
+	if (this->flags.Test(VehicleShipFlag::SecondEndFacingForward)) direction = ReverseDir(direction);
 
 	if (IsCustomVehicleSpriteNum(spritenum)) {
 		GetCustomVehicleSprite(this, direction, image_type, result);
@@ -595,10 +595,10 @@ static void ReverseShipIntoTrackdir(Ship *v, Trackdir trackdir)
 	assert(v->direction != Direction::Invalid);
 	v->state = TrackdirBitsToTrackBits(TrackdirToTrackdirBits(trackdir));
 
-	/* Double-ended ships can simply reverse without turning. */
+	/* Double-ended ships can instantly "turn" 180 degrees by switching which end is forward-facing. */
 	if (v->GetEngine()->VehInfo<ShipVehicleInfo>().double_ended) {
-		v->rotation = v->direction;
-		v->vehicle_flags.Flip(VehicleFlag::DrivingBackwards);
+		v->rotation = ReverseDir(v->rotation);
+		v->flags.Flip(VehicleShipFlag::SecondEndFacingForward);
 	}
 
 	/* Remember our current location to avoid movement glitch */
@@ -615,10 +615,10 @@ static void ReverseShip(Ship *v)
 {
 	v->direction = ReverseDir(v->direction);
 
-	/* Double-ended ships can simply reverse without turning. */
+	/* Double-ended ships can instantly "turn" 180 degrees by switching which end is forward-facing. */
 	if (v->GetEngine()->VehInfo<ShipVehicleInfo>().double_ended) {
-		v->rotation = v->direction;
-		v->vehicle_flags.Flip(VehicleFlag::DrivingBackwards);
+		v->rotation = ReverseDir(v->rotation);
+		v->flags.Flip(VehicleShipFlag::SecondEndFacingForward);
 	}
 
 	/* Remember our current location to avoid movement glitch */
@@ -633,6 +633,8 @@ static void ReverseShip(Ship *v)
 
 static void ShipController(Ship *v)
 {
+	v->vehicle_flags.Reset(VehicleFlag::DrivingBackwards); // TODO remove and create new clean savegames
+
 	v->tick_counter++;
 	v->current_order_time++;
 

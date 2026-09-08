@@ -401,7 +401,7 @@ public:
 	 * Get the moving direction of this vehicle chain.
 	 * @return The direction that the vehicle chain is currently moving.
 	 */
-	Direction GetMovingDirection() const { return (this->IsDrivingBackwards() && this->type == VehicleType::Train) ? ReverseDir(this->direction) : this->direction; }
+	Direction GetMovingDirection() const { return this->IsDrivingBackwards() ? ReverseDir(this->direction) : this->direction; }
 
 	/**
 	 * Set the movement direction of this vehicle chain.
