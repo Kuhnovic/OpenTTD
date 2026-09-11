@@ -1123,6 +1123,8 @@ static void DoDrawVehicle(const Vehicle *v)
 
 	if (v->vehstatus.Test(VehState::DefaultPalette)) pal = v->vehstatus.Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(v);
 
+	if (v->type == VehicleType::Ship && Ship::From(v)->flags.Test(VehicleShipFlag::SecondEndFacingForward)) pal = PALETTE_CRASH;
+
 	/* Check whether the vehicle shall be transparent due to the game state */
 	bool shadowed = v->vehstatus.Test(VehState::Shadow);
 
@@ -2768,8 +2770,8 @@ static void SpawnAdvancedVisualEffect(const Vehicle *v)
 	}
 
 	Direction l_dir = v->direction;
-	if (v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped)) l_dir = ReverseDir(l_dir);
-	if (v->type == VehicleType::Ship && Ship::From(v)->flags.Test(VehicleShipFlag::SecondEndFacingForward)) l_dir = ReverseDir(l_dir);
+	if (v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped)
+			|| v->type == VehicleType::Ship && Ship::From(v)->flags.Test(VehicleShipFlag::SecondEndFacingForward)) l_dir = ReverseDir(l_dir);
 	Direction t_dir = ChangeDir(l_dir, DirDiff::Right90);
 
 	int8_t x_center = _vehicle_smoke_pos[l_dir] * l_center;
